@@ -3,6 +3,11 @@ import { Otp } from './Otp.js';
 import { RefreshToken } from './RefreshToken.js';
 import { BirthChart } from './BirthChart.js';
 import { BirthDetail } from './BirthDetail.js';
+import { ChatThread } from './ChatThread.js';
+import { ChatMessage } from './ChatMessage.js';
+import { Order } from './Order.js';
+import { Invoice } from './Invoice.js';
+import { Coupon } from './Coupon.js';
 
 // User <-> Otp
 User.hasMany(Otp, { foreignKey: 'user_id', as: 'otps' });
@@ -24,10 +29,40 @@ BirthDetail.belongsTo(User, { foreignKey: 'user_id', as: 'user' });
 BirthDetail.belongsTo(BirthChart, { foreignKey: 'chart_id', as: 'chart' });
 BirthChart.hasOne(BirthDetail, { foreignKey: 'chart_id', as: 'birth_detail' });
 
+// User <-> ChatThread
+User.hasMany(ChatThread, { foreignKey: 'user_id', as: 'chat_threads' });
+ChatThread.belongsTo(User, { foreignKey: 'user_id', as: 'user' });
+
+// BirthChart <-> ChatThread
+BirthChart.hasMany(ChatThread, { foreignKey: 'chart_id', as: 'chat_threads' });
+ChatThread.belongsTo(BirthChart, { foreignKey: 'chart_id', as: 'chart' });
+
+// ChatThread <-> ChatMessage
+ChatThread.hasMany(ChatMessage, { foreignKey: 'thread_id', as: 'messages' });
+ChatMessage.belongsTo(ChatThread, { foreignKey: 'thread_id', as: 'thread' });
+
+// User <-> Order
+User.hasMany(Order, { foreignKey: 'user_id', as: 'orders' });
+Order.belongsTo(User, { foreignKey: 'user_id', as: 'user' });
+
+// User <-> Invoice
+User.hasMany(Invoice, { foreignKey: 'user_id', as: 'invoices' });
+Invoice.belongsTo(User, { foreignKey: 'user_id', as: 'user' });
+
+// Order <-> Invoice
+Order.hasOne(Invoice, { foreignKey: 'order_id', as: 'invoice' });
+Invoice.belongsTo(Order, { foreignKey: 'order_id', as: 'order' });
+
 export {
   User,
   Otp,
   RefreshToken,
   BirthChart,
-  BirthDetail
+  BirthDetail,
+  ChatThread,
+  ChatMessage,
+  Order,
+  Invoice,
+  Coupon
 };
+

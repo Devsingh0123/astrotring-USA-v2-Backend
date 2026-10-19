@@ -6,6 +6,8 @@ import { connectDB } from './config/db.js';
 import authRoutes from './routes/authRoutes.js';
 import vedicRoutes from './routes/vedicRoutes.js';
 import onboardingRoutes from './routes/onboardingRoutes.js';
+import chatRoutes from './routes/chatRoutes.js';
+import billingRoutes from './routes/billingRoutes.js';
 import { errorHandler } from './middleware/errorHandler.js';
 
 dotenv.config();
@@ -34,9 +36,10 @@ app.get('/health', (req, res) => {
 
 // API Routes Mounting
 app.use('/api/v1/auth', authRoutes);
-app.use('/api/v1/vedic', vedicRoutes); // Unified Vedic astrology endpoint tree
+app.use('/api/v1/vedic', vedicRoutes);
 app.use('/api/v1/onboarding', onboardingRoutes);
-
+app.use('/api/v1/chat', chatRoutes);
+app.use('/api/v1/billing', billingRoutes);
 
 // Unhandled Route Handler
 app.all('*', (req, res) => {
@@ -51,7 +54,6 @@ app.use(errorHandler);
 
 const PORT = process.env.PORT || 5000;
 
-// Connect to Database and start server if executed directly
 export const startServer = async () => {
   await connectDB();
   return app.listen(PORT, () => {

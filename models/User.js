@@ -30,6 +30,24 @@ export const User = sequelize.define('User', {
     type: DataTypes.ENUM('user', 'admin'),
     allowNull: false,
     defaultValue: 'user'
+  },
+  // Number of Vaani consultation credits available (every new user starts with 1 free question)
+  credit_balance: {
+    type: DataTypes.INTEGER,
+    allowNull: false,
+    defaultValue: 1
+  },
+  // Number of Deep Report credits available
+  report_credits: {
+    type: DataTypes.INTEGER,
+    allowNull: false,
+    defaultValue: 0
+  },
+  // User's active membership/pack tier
+  tier: {
+    type: DataTypes.ENUM('free', 'silver', 'gold', 'diamond'),
+    allowNull: false,
+    defaultValue: 'free'
   }
 }, {
   tableName: 'users',

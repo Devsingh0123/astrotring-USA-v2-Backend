@@ -193,7 +193,10 @@ export const verifyOtp = asyncHandler(async (req, res, next) => {
         email: user.email,
         role: user.role,
         isEmailVerified: user.is_email_verified,
-        onboardingCompleted: user.onboarding_completed
+        onboardingCompleted: user.onboarding_completed,
+        creditBalance: user.credit_balance,
+        reportCredits: user.report_credits,
+        tier: user.tier
       }
     }
   });
@@ -332,6 +335,9 @@ export const getMe = asyncHandler(async (req, res, next) => {
         role: user.role,
         isEmailVerified: user.is_email_verified,
         onboardingCompleted: user.onboarding_completed,
+        creditBalance: user.credit_balance,
+        reportCredits: user.report_credits,
+        tier: user.tier,
         createdAt: user.created_at
       },
       birthDetails: primaryBirthDetail ? {

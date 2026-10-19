@@ -141,7 +141,8 @@ export const submitOnboarding = asyncHandler(async (req, res, next) => {
         email: user.email,
         role: user.role,
         isEmailVerified: user.is_email_verified,
-        onboardingCompleted: true
+        onboardingCompleted: true,
+        creditBalance: user.credit_balance
       },
       birthDetails: {
         id: birthDetail.id,

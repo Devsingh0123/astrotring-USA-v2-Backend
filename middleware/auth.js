@@ -32,3 +32,36 @@ export const protect = asyncHandler(async (req, res, next) => {
   req.user = currentUser;
   next();
 });
+
+/**
+ * Optional authentication middleware:
+ * Attaches `req.user` if a valid Bearer JWT is provided, or sets `req.user = null`
+ * for unauthenticated guests without throwing an error (used by Astropedia).
+ */
+export const optionalAuth = asyncHandler(async (req, res, next) => {
+  req.user = null;
+
+  const authHeader = req.headers.authorization;
+  if (!authHeader || !authHeader.startsWith('Bearer ')) {
+    return next();
+  }
+
+  const token = authHeader.split(' ')[1];
+  if (!token) {
+    return next();
+  }
+
+  try {
+    const decoded = verifyAccessToken(token);
+    const currentUser = await User.findByPk(decoded.id);
+    if (currentUser) {
+      req.user = currentUser;
+    }
+  } catch {
+    // Ignore invalid/expired token for optional auth endpoints
+    req.user = null;
+  }
+
+  next();
+});
+
