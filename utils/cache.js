@@ -1,61 +1,73 @@
-/**
- * Production In-Memory LRU Cache with TTL support.
- * Used for deterministic astronomical and astrological calculations
- * to avoid duplicate remote API calls and ensure ultra-low response latency (<5ms).
- */
-export class MemoryCache {
-  constructor(maxSize = 1000, defaultTtlMs = 1000 * 60 * 60 * 24) { // default 24h
-    this.maxSize = maxSize;
-    this.defaultTtlMs = defaultTtlMs;
-    this.cache = new Map();
+import Redis from 'ioredis';
+import dotenv from 'dotenv';
+
+dotenv.config();
+
+const REDIS_URL = process.env.REDIS_URL || 'redis://127.0.0.1:6379';
+const DEFAULT_TTL_SECONDS = 60 * 60 * 24; // 24 hours
+
+export const redisClient = new Redis(REDIS_URL, {
+  maxRetriesPerRequest: 1,
+  connectTimeout: 3000,
+  retryStrategy(times) {
+    return Math.min(times * 500, 5000);
   }
+});
+
+redisClient.on('connect', () => {
+  console.log('Redis cache connected successfully.');
+});
+
+redisClient.on('error', (err) => {
+  console.error('Redis cache error:', err.message);
+});
+
+/**
+ * Redis-backed temporary cache utility for Vedic Astrology & Horoscope calculations.
+ */
+export const vedicCache = {
+  /**
+   * Generates a deterministic Redis key from an object of parameters.
+   */
+  generateKey(prefix, params) {
+    const sortedKeys = Object.keys(params).sort();
+    const serialized = sortedKeys
+      .map((k) => `${k}=${JSON.stringify(params[k])}`)
+      .join('&');
+    return `astrotring:${prefix}:${serialized}`;
+  },
 
   /**
-   * Generates a deterministic hash key from an arbitrary object or primitive
+   * Retrieve a parsed JSON value from Redis by key.
    */
-  static generateKey(prefix, data) {
-    if (typeof data === 'string') {
-      return `${prefix}:${data}`;
-    }
-    const sortedString = JSON.stringify(data, Object.keys(data).sort());
-    return `${prefix}:${sortedString}`;
-  }
-
-  get(key) {
-    const item = this.cache.get(key);
-    if (!item) return null;
-
-    if (Date.now() > item.expiry) {
-      this.cache.delete(key);
+  async get(key) {
+    try {
+      const raw = await redisClient.get(key);
+      return raw ? JSON.parse(raw) : null;
+    } catch {
       return null;
     }
+  },
 
-    // Refresh position for LRU
-    this.cache.delete(key);
-    this.cache.set(key, item);
-    return item.value;
-  }
-
-  set(key, value, ttlMs = this.defaultTtlMs) {
-    if (this.cache.size >= this.maxSize) {
-      // Evict oldest item (first key in map iterator)
-      const oldestKey = this.cache.keys().next().value;
-      this.cache.delete(oldestKey);
+  /**
+   * Store a JSON-serializable value in Redis with an expiration TTL (in seconds).
+   */
+  async set(key, value, ttlSeconds = DEFAULT_TTL_SECONDS) {
+    try {
+      await redisClient.set(key, JSON.stringify(value), 'EX', ttlSeconds);
+    } catch {
+      // Non-fatal: if Redis is unreachable, skip caching without breaking the request
     }
+  },
 
-    this.cache.set(key, {
-      value,
-      expiry: Date.now() + ttlMs
-    });
+  /**
+   * Delete a key from Redis.
+   */
+  async del(key) {
+    try {
+      await redisClient.del(key);
+    } catch {
+      // Non-fatal
+    }
   }
-
-  has(key) {
-    return this.get(key) !== null;
-  }
-
-  clear() {
-    this.cache.clear();
-  }
-}
-
-export const vedicCache = new MemoryCache(2000, 1000 * 60 * 60 * 24); // 24h cache for 2000 items
+};

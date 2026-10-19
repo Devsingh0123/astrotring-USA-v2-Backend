@@ -8,6 +8,7 @@ import vedicRoutes from './routes/vedicRoutes.js';
 import onboardingRoutes from './routes/onboardingRoutes.js';
 import chatRoutes from './routes/chatRoutes.js';
 import billingRoutes from './routes/billingRoutes.js';
+import horoscopeRoutes from './routes/horoscopeRoutes.js';
 import { errorHandler } from './middleware/errorHandler.js';
 
 dotenv.config();
@@ -40,6 +41,7 @@ app.use('/api/v1/vedic', vedicRoutes);
 app.use('/api/v1/onboarding', onboardingRoutes);
 app.use('/api/v1/chat', chatRoutes);
 app.use('/api/v1/billing', billingRoutes);
+app.use('/api/v1/horoscopes', horoscopeRoutes);
 
 // Unhandled Route Handler
 app.all('*', (req, res) => {

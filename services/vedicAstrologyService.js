@@ -1,5 +1,5 @@
 import { AppError } from '../utils/appError.js';
-import { MemoryCache, vedicCache } from '../utils/cache.js';
+import { vedicCache } from '../utils/cache.js';
 
 const BASE_URL = process.env.VEDIC_ENGINE_BASE_URL || 'https://jagannatha-hora-359167915530.europe-west1.run.app';
 
@@ -126,13 +126,13 @@ const getFromEngine = async (endpoint, queryParams = {}, timeoutMs = 10000) => {
 export const vedicAstrologyService = {
   /**
    * 1. Get Complete Horoscope (Kundli, Vargas, Yogas, Doshas, Dashas)
-   * Caches results deterministically for 24h.
+   * Caches results deterministically for 24h in Redis.
    */
   async getHoroscope(rawParams, dashaScope = 'vimsottari') {
     const birthDetails = normalizeBirthDetails(rawParams);
-    const cacheKey = MemoryCache.generateKey(`horoscope:${dashaScope}`, birthDetails);
+    const cacheKey = vedicCache.generateKey(`horoscope:${dashaScope}`, birthDetails);
 
-    const cached = vedicCache.get(cacheKey);
+    const cached = await vedicCache.get(cacheKey);
     if (cached) return cached;
 
     const endpoint = `/horoscope?dasha_scope=${dashaScope}`;
@@ -167,7 +167,7 @@ export const vedicAstrologyService = {
       raw: response.horoscope
     };
 
-    vedicCache.set(cacheKey, result);
+    await vedicCache.set(cacheKey, result);
     return result;
   },
 
@@ -178,8 +178,8 @@ export const vedicAstrologyService = {
     const boyBirth = normalizeBirthDetails(boyParams);
     const girlBirth = normalizeBirthDetails(girlParams);
 
-    const cacheKey = MemoryCache.generateKey('match', { boyBirth, girlBirth });
-    const cached = vedicCache.get(cacheKey);
+    const cacheKey = vedicCache.generateKey('match', { boyBirth, girlBirth });
+    const cached = await vedicCache.get(cacheKey);
     if (cached) return cached;
 
     const payload = {
@@ -221,7 +221,7 @@ export const vedicAstrologyService = {
       raw: response
     };
 
-    vedicCache.set(cacheKey, result);
+    await vedicCache.set(cacheKey, result);
     return result;
   },
 
@@ -242,14 +242,14 @@ export const vedicAstrologyService = {
       ayanamsa_mode: 'LAHIRI'
     };
 
-    const cacheKey = MemoryCache.generateKey('panchang', payload);
-    const cached = vedicCache.get(cacheKey);
+    const cacheKey = vedicCache.generateKey('panchang', payload);
+    const cached = await vedicCache.get(cacheKey);
     if (cached) return cached;
 
     // Cache for 6 hours (panchang is daily)
     const response = await postToEngine('/panchang', payload);
     const result = response.panchang || response;
-    vedicCache.set(cacheKey, result, 1000 * 60 * 60 * 6);
+    await vedicCache.set(cacheKey, result, 60 * 60 * 6);
     return result;
   },
 
@@ -258,33 +258,33 @@ export const vedicAstrologyService = {
    */
   async getSaturnTimeline(rawParams) {
     const birthDetails = normalizeBirthDetails(rawParams);
-    const cacheKey = MemoryCache.generateKey('saturn_timeline', birthDetails);
+    const cacheKey = vedicCache.generateKey('saturn_timeline', birthDetails);
 
-    const cached = vedicCache.get(cacheKey);
+    const cached = await vedicCache.get(cacheKey);
     if (cached) return cached;
 
     const response = await postToEngine('/saturn-timeline', birthDetails);
-    vedicCache.set(cacheKey, response);
+    await vedicCache.set(cacheKey, response);
     return response;
   },
 
   /**
    * 5. Gochara (Current Planetary Transits relative to natal Moon/Ascendant)
    */
-  async getGochara(rawParams, transitDate = null) {
+  async getGochara(rawParams, targetDate = null) {
     const birthDetails = normalizeBirthDetails(rawParams);
     const payload = {
       ...birthDetails,
-      transit_date: transitDate || new Date().toISOString().split('T')[0]
+      target_date: targetDate || new Date().toISOString().split('T')[0]
     };
 
-    const cacheKey = MemoryCache.generateKey('gochara', payload);
-    const cached = vedicCache.get(cacheKey);
+    const cacheKey = vedicCache.generateKey('gochara', payload);
+    const cached = await vedicCache.get(cacheKey);
     if (cached) return cached;
 
     // Cache transits for 1 hour
     const response = await postToEngine('/gochara', payload);
-    vedicCache.set(cacheKey, response, 1000 * 60 * 60);
+    await vedicCache.set(cacheKey, response, 60 * 60);
     return response;
   },
 
@@ -303,12 +303,12 @@ export const vedicAstrologyService = {
       to_date: toDate
     };
 
-    const cacheKey = MemoryCache.generateKey('gochara_range', payload);
-    const cached = vedicCache.get(cacheKey);
+    const cacheKey = vedicCache.generateKey('gochara_range', payload);
+    const cached = await vedicCache.get(cacheKey);
     if (cached) return cached;
 
     const response = await postToEngine('/gochara/range', payload);
-    vedicCache.set(cacheKey, response, 1000 * 60 * 60 * 12);
+    await vedicCache.set(cacheKey, response, 60 * 60 * 12);
     return response;
   },
 
@@ -328,12 +328,12 @@ export const vedicAstrologyService = {
       to_date: toDate
     };
 
-    const cacheKey = MemoryCache.generateKey('muhurta', payload);
-    const cached = vedicCache.get(cacheKey);
+    const cacheKey = vedicCache.generateKey('muhurta', payload);
+    const cached = await vedicCache.get(cacheKey);
     if (cached) return cached;
 
     const response = await postToEngine('/muhurta', payload);
-    vedicCache.set(cacheKey, response, 1000 * 60 * 60 * 6);
+    await vedicCache.set(cacheKey, response, 60 * 60 * 6);
     return response;
   },
 
@@ -347,13 +347,13 @@ export const vedicAstrologyService = {
     const cleanQuery = query.trim();
     if (cleanQuery.length < 2) return [];
 
-    const cacheKey = `loc_search:${cleanQuery}:${limit}`;
-    const cached = vedicCache.get(cacheKey);
+    const cacheKey = `astrotring:loc_search:${cleanQuery}:${limit}`;
+    const cached = await vedicCache.get(cacheKey);
     if (cached) return cached;
 
     const response = await getFromEngine('/location/autocomplete', { query: cleanQuery, limit });
     const results = response.results || [];
-    vedicCache.set(cacheKey, results, 1000 * 60 * 60 * 24); // 24h cache for city locations
+    await vedicCache.set(cacheKey, results, 60 * 60 * 24); // 24h cache for city locations
     return results;
   },
 
@@ -373,13 +373,13 @@ export const vedicAstrologyService = {
       ayanamsa_mode: ayanamsa
     };
 
-    const cacheKey = MemoryCache.generateKey('planet_ingress', payload);
-    const cached = vedicCache.get(cacheKey);
+    const cacheKey = vedicCache.generateKey('planet_ingress', payload);
+    const cached = await vedicCache.get(cacheKey);
     if (cached) return cached;
 
     const response = await postToEngine('/planet-ingress', payload);
     const result = response.planet_ingress || response;
-    vedicCache.set(cacheKey, result, 1000 * 60 * 60 * 24); // 24h cache
+    await vedicCache.set(cacheKey, result, 60 * 60 * 24); // 24h cache
     return result;
   },
 
@@ -400,13 +400,13 @@ export const vedicAstrologyService = {
       ayanamsa_mode: 'LAHIRI'
     };
 
-    const cacheKey = MemoryCache.generateKey('surya_siddhanta', payload);
-    const cached = vedicCache.get(cacheKey);
+    const cacheKey = vedicCache.generateKey('surya_siddhanta', payload);
+    const cached = await vedicCache.get(cacheKey);
     if (cached) return cached;
 
     const response = await postToEngine('/surya-siddhanta', payload);
     const result = response.surya_siddhanta || response;
-    vedicCache.set(cacheKey, result);
+    await vedicCache.set(cacheKey, result);
     return result;
   },
 

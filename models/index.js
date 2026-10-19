@@ -8,6 +8,7 @@ import { ChatMessage } from './ChatMessage.js';
 import { Order } from './Order.js';
 import { Invoice } from './Invoice.js';
 import { Coupon } from './Coupon.js';
+import { HoroscopeForecast } from './HoroscopeForecast.js';
 
 // User <-> Otp
 User.hasMany(Otp, { foreignKey: 'user_id', as: 'otps' });
@@ -63,6 +64,8 @@ export {
   ChatMessage,
   Order,
   Invoice,
-  Coupon
+  Coupon,
+  HoroscopeForecast
 };
+
 
