@@ -1,4 +1,4 @@
-import { BirthDetail, BirthChart, User } from '../models/index.js';
+import { BirthDetail, BirthChart } from '../models/index.js';
 import { vedicAstrologyService } from '../services/vedicAstrologyService.js';
 import { AppError } from '../utils/appError.js';
 import { asyncHandler } from '../utils/asyncHandler.js';
@@ -9,8 +9,8 @@ import { asyncHandler } from '../utils/asyncHandler.js';
  * Step 1: name, gender
  * Step 2: dob, tob, isTimeUnknown, location (city, lat, lng, timezone)
  *
- * Saves primary birth details, automatically computes initial natal chart,
- * updates user.onboarding_completed = true.
+ * Saves primary birth details, automatically computes initial natal chart (raw response.horoscope),
+ * and updates user.onboarding_completed = true.
  */
 export const submitOnboarding = asyncHandler(async (req, res, next) => {
   const user = req.user;
@@ -29,7 +29,6 @@ export const submitOnboarding = asyncHandler(async (req, res, next) => {
     timezone
   } = req.body;
 
-  // Validation
   const fullName = (name || '').trim();
   if (!fullName) {
     return next(new AppError('Full name is required.', 400));
@@ -59,7 +58,7 @@ export const submitOnboarding = asyncHandler(async (req, res, next) => {
     return next(new AppError('Birth location coordinates and timezone are required.', 400));
   }
 
-  // 1. Calculate Natal Horoscope using Vedic Engine
+  // 1. Calculate Natal Horoscope using Vedic Engine (returns raw response.horoscope)
   const horoscopeData = await vedicAstrologyService.getHoroscope({
     date: birthDate,
     time: birthTime,
@@ -67,10 +66,13 @@ export const submitOnboarding = asyncHandler(async (req, res, next) => {
     latitude: lat,
     longitude: lon,
     timezone: tz,
-    gender: normalizedGender
+    gender: normalizedGender === 'female' ? 'female' : 'male'
   });
 
-  // 2. Persist BirthChart record
+  const rasi = horoscopeData?.divisional_charts?.['D-1_rasi'] || {};
+  const moonNakshatra = horoscopeData?.nakshatra_pada?.Moon || {};
+
+  // 2. Persist BirthChart record with exact raw horoscopeData in chart_data
   const birthChart = await BirthChart.create({
     user_id: user.id,
     person_name: fullName,
@@ -82,11 +84,11 @@ export const submitOnboarding = asyncHandler(async (req, res, next) => {
     latitude: lat,
     longitude: lon,
     timezone: tz,
-    ascendant_sign: horoscopeData.summary?.ascendantSign,
-    moon_sign: horoscopeData.summary?.moonSign,
-    sun_sign: horoscopeData.summary?.sunSign,
-    nakshatra: horoscopeData.summary?.nakshatra,
-    nakshatra_pada: horoscopeData.summary?.pada,
+    ascendant_sign: rasi.Ascendant?.sign || null,
+    moon_sign: rasi.Moon?.sign || null,
+    sun_sign: rasi.Sun?.sign || null,
+    nakshatra: moonNakshatra.nakshatra || null,
+    nakshatra_pada: moonNakshatra.pada || null,
     chart_data: horoscopeData
   });
 
@@ -104,7 +106,7 @@ export const submitOnboarding = asyncHandler(async (req, res, next) => {
     birthDetail.date_of_birth = birthDate;
     birthDetail.time_of_birth = birthTime;
     birthDetail.is_time_unknown = isTimeUnknown;
-    birthDetail.birth_city = birthCity;
+    birthDetail.birth_city = birthCity || 'Unknown City';
     birthDetail.latitude = lat;
     birthDetail.longitude = lon;
     birthDetail.timezone = tz;
@@ -157,7 +159,13 @@ export const submitOnboarding = asyncHandler(async (req, res, next) => {
         timezone: birthDetail.timezone,
         chartId: birthChart.id
       },
-      chartSummary: horoscopeData.summary
+      chartSummary: {
+        ascendantSign: birthChart.ascendant_sign,
+        moonSign: birthChart.moon_sign,
+        sunSign: birthChart.sun_sign,
+        nakshatra: birthChart.nakshatra,
+        pada: birthChart.nakshatra_pada
+      }
     }
   });
 });
@@ -166,7 +174,7 @@ export const submitOnboarding = asyncHandler(async (req, res, next) => {
  * 2. GET /api/v1/onboarding/status
  * Check current user onboarding state and primary profile
  */
-export const getOnboardingStatus = asyncHandler(async (req, res, next) => {
+export const getOnboardingStatus = asyncHandler(async (req, res) => {
   const user = req.user;
 
   const primaryBirthDetail = await BirthDetail.findOne({

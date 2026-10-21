@@ -3,47 +3,68 @@ import { vedicCache } from '../utils/cache.js';
 
 const BASE_URL = process.env.VEDIC_ENGINE_BASE_URL || 'https://jagannatha-hora-359167915530.europe-west1.run.app';
 
-/**
- * Normalizes birth detail parameters into the canonical shape expected by Jagannatha Hora engine.
- */
-export const normalizeBirthDetails = (params) => {
-  const {
-    date,
-    time,
-    place = '',
-    latitude,
-    longitude,
-    timezone,
-    gender = 'male',
-    ayanamsa_mode = 'LAHIRI',
-    calculation_type = 'drik'
-  } = params;
-
-  if (!date || !time) {
-    throw new AppError('Birth date (YYYY-MM-DD) and time (HH:MM:SS) are required.', 400);
-  }
-  if (latitude === undefined || longitude === undefined || timezone === undefined) {
-    throw new AppError('Latitude, longitude, and timezone offset are required.', 400);
-  }
-
-  // Ensure 24h format HH:MM:SS
-  const normalizedTime = time.length === 5 ? `${time}:00` : time;
-
-  return {
-    date: date.trim(),
-    time: normalizedTime.trim(),
-    place: (place || 'Birth Location').trim(),
-    latitude: Number(latitude),
-    longitude: Number(longitude),
-    timezone: Number(timezone),
-    gender: gender.toLowerCase() === 'female' ? 'female' : 'male',
-    ayanamsa_mode,
-    calculation_type
-  };
+const TTL = {
+  ONE_MINUTE: 60,
+  ONE_HOUR: 60 * 60,
+  SIX_HOURS: 60 * 60 * 6,
+  TWELVE_HOURS: 60 * 60 * 12,
+  ONE_DAY: 60 * 60 * 24,
+  SEVEN_DAYS: 60 * 60 * 24 * 7
 };
 
 /**
- * Internal HTTP POST caller with timeout and structured error parsing.
+ * Validates and normalizes the 5 MCP-required birth fields + optional place and gender.
+ * Required: date (YYYY-MM-DD), time (HH:MM:SS), latitude, longitude, timezone.
+ */
+export const normalizeBirthDetails = (params = {}) => {
+  const { date, time, latitude, longitude, timezone, place, gender } = params;
+
+  if (
+    !date ||
+    !time ||
+    latitude === undefined ||
+    longitude === undefined ||
+    timezone === undefined
+  ) {
+    throw new AppError(
+      'date (YYYY-MM-DD), time (HH:MM:SS), latitude, longitude, and timezone are required.',
+      400
+    );
+  }
+
+  const trimmedTime = String(time).trim();
+  const normalizedTime = trimmedTime.length === 5 ? `${trimmedTime}:00` : trimmedTime;
+
+  const payload = {
+    date: String(date).trim(),
+    time: normalizedTime,
+    place: place ? String(place).trim() : '',
+    latitude: Number(latitude),
+    longitude: Number(longitude),
+    timezone: Number(timezone)
+  };
+
+  if (gender === 'male' || gender === 'female') {
+    payload.gender = gender;
+  }
+
+  return payload;
+};
+
+/**
+ * Copies defined optional fields from `source` into `target`.
+ */
+const pickOptionalFields = (source, target, keys) => {
+  for (const key of keys) {
+    if (source[key] !== undefined && source[key] !== null) {
+      target[key] = source[key];
+    }
+  }
+  return target;
+};
+
+/**
+ * Internal HTTP POST caller with timeout and structured error handling.
  */
 const postToEngine = async (endpoint, payload, timeoutMs = 15000) => {
   const controller = new AbortController();
@@ -67,10 +88,13 @@ const postToEngine = async (endpoint, payload, timeoutMs = 15000) => {
       try {
         const errJson = await response.json();
         errDetail = errJson.detail || errJson.message || JSON.stringify(errJson);
-      } catch (e) {
+      } catch {
         errDetail = await response.text();
       }
-      throw new AppError(`Vedic Engine Error (${response.status}): ${errDetail}`, response.status >= 500 ? 502 : 400);
+      throw new AppError(
+        `Vedic Engine Error (${response.status}): ${errDetail}`,
+        response.status >= 500 ? 502 : 400
+      );
     }
 
     return await response.json();
@@ -85,7 +109,7 @@ const postToEngine = async (endpoint, payload, timeoutMs = 15000) => {
 };
 
 /**
- * Internal HTTP GET caller with timeout.
+ * Internal HTTP GET caller with timeout and query parameters.
  */
 const getFromEngine = async (endpoint, queryParams = {}, timeoutMs = 10000) => {
   const controller = new AbortController();
@@ -93,9 +117,9 @@ const getFromEngine = async (endpoint, queryParams = {}, timeoutMs = 10000) => {
 
   try {
     const url = new URL(`${BASE_URL}${endpoint}`);
-    Object.entries(queryParams).forEach(([k, v]) => {
-      if (v !== undefined && v !== null) {
-        url.searchParams.append(k, v);
+    Object.entries(queryParams).forEach(([key, value]) => {
+      if (value !== undefined && value !== null) {
+        url.searchParams.append(key, value);
       }
     });
 
@@ -108,337 +132,449 @@ const getFromEngine = async (endpoint, queryParams = {}, timeoutMs = 10000) => {
     clearTimeout(timer);
 
     if (!response.ok) {
-      throw new AppError(`Location lookup error: ${response.statusText}`, response.status >= 500 ? 502 : 400);
+      throw new AppError(
+        `Vedic Engine GET Error (${response.status}): ${response.statusText}`,
+        response.status >= 500 ? 502 : 400
+      );
     }
 
     return await response.json();
   } catch (error) {
     clearTimeout(timer);
-    if (error.name === 'AbortError') throw new AppError('Location service timed out.', 504);
+    if (error.name === 'AbortError') {
+      throw new AppError('Vedic calculation engine GET request timed out.', 504);
+    }
     if (error instanceof AppError) throw error;
-    throw new AppError(`Failed to connect to location engine: ${error.message}`, 502);
+    throw new AppError(`Failed to connect to Vedic engine: ${error.message}`, 502);
   }
 };
 
 /**
- * Production Service: Vedic Astrology Engine
+ * Complete Vedic Astrology Service — All 15 Official `/api-mcp` REST Endpoints + MCP Divisional Charts Index
  */
 export const vedicAstrologyService = {
   /**
-   * 1. Get Complete Horoscope (Kundli, Vargas, Yogas, Doshas, Dashas)
-   * Caches results deterministically for 24h in Redis.
+   * 1. POST /horoscope — Full birth chart
+   * Returns exact `response.horoscope` object from the API.
    */
-  async getHoroscope(rawParams, dashaScope = 'vimsottari') {
-    const birthDetails = normalizeBirthDetails(rawParams);
+  async getHoroscope(params, dashaScope = 'vimsottari') {
+    const birthDetails = normalizeBirthDetails(params);
     const cacheKey = vedicCache.generateKey(`horoscope:${dashaScope}`, birthDetails);
 
     const cached = await vedicCache.get(cacheKey);
     if (cached) return cached;
 
-    const endpoint = `/horoscope?dasha_scope=${dashaScope}`;
-    const response = await postToEngine(endpoint, birthDetails);
+    const response = await postToEngine(`/horoscope?dasha_scope=${dashaScope}`, birthDetails);
+    const result = response.horoscope;
 
-    // Transform and standardize the result for AstroTring client consumption
-    const result = {
-      birthDetails: response.birth_details,
-      calendarInfo: response.horoscope?.calendar_info || {},
-      summary: {
-        ascendantSign: response.horoscope?.divisional_charts?.['D-1_rasi']?.Ascendant?.sign,
-        ascendantDegree: response.horoscope?.divisional_charts?.['D-1_rasi']?.Ascendant?.longitude,
-        moonSign: response.horoscope?.divisional_charts?.['D-1_rasi']?.Moon?.sign,
-        moonDegree: response.horoscope?.divisional_charts?.['D-1_rasi']?.Moon?.longitude,
-        sunSign: response.horoscope?.divisional_charts?.['D-1_rasi']?.Sun?.sign,
-        nakshatra: response.horoscope?.nakshatra_pada?.Moon?.nakshatra,
-        pada: response.horoscope?.nakshatra_pada?.Moon?.pada,
-        nakshatraLord: response.horoscope?.nakshatra_pada?.Moon?.nakshatra_lord
-      },
-      rasiChart: response.horoscope?.divisional_charts?.['D-1_rasi'] || {},
-      navamsaChart: response.horoscope?.divisional_charts?.['D-9_navamsa'] || {},
-      dasamsaChart: response.horoscope?.divisional_charts?.['D-10_dasamsa'] || {},
-      allDivisionalCharts: response.horoscope?.divisional_charts || {},
-      dashas: response.horoscope?.graha_dashas || {},
-      yogas: response.horoscope?.yogas || {},
-      doshas: response.horoscope?.doshas || {},
-      charaKarakas: response.horoscope?.chara_karakas || {},
-      ashtakavarga: response.horoscope?.ashtakavarga || {},
-      shadbala: response.horoscope?.shad_bala || {},
-      bhavabala: response.horoscope?.bhava_bala || {},
-      saturnTransits: response.horoscope?.saturn_transits || {},
-      raw: response.horoscope
-    };
-
-    await vedicCache.set(cacheKey, result);
+    await vedicCache.set(cacheKey, result, TTL.ONE_DAY);
     return result;
   },
 
   /**
-   * 2. Calculate 36-Point Marriage Compatibility (Kundli Milan / Ashtakoota)
+   * 2. POST /marriage-match — Marriage compatibility (Ashtakoota + 10 Porutham)
    */
   async calculateMarriageMatch(boyParams, girlParams) {
     const boyBirth = normalizeBirthDetails(boyParams);
     const girlBirth = normalizeBirthDetails(girlParams);
-
-    const cacheKey = vedicCache.generateKey('match', { boyBirth, girlBirth });
-    const cached = await vedicCache.get(cacheKey);
-    if (cached) return cached;
 
     const payload = {
       boy_birth_details: boyBirth,
       girl_birth_details: girlBirth
     };
 
-    const response = await postToEngine('/marriage-match', payload);
-
-    const northIndian = response.north_indian || {};
-    const overall = northIndian.overall_compatibility || {};
-
-    const result = {
-      boy: {
-        name: boyParams.name || 'Groom',
-        sign: response.boy?.rasi,
-        nakshatra: response.boy?.nakshatra,
-        pada: response.boy?.pada
-      },
-      girl: {
-        name: girlParams.name || 'Bride',
-        sign: response.girl?.rasi,
-        nakshatra: response.girl?.nakshatra,
-        pada: response.girl?.pada
-      },
-      ashtakoota: {
-        totalScore: overall.total_score,
-        maxScore: overall.max_possible_score || 36,
-        percentage: overall.percentage,
-        verdict: overall.rating,
-        kootas: northIndian.eight_koota_porutham || {}
-      },
-      additionalFactors: northIndian.four_additional_porutham || {},
-      mangalDosha: {
-        boy: response.boy_dosha_data || {},
-        girl: response.girl_dosha_data || {}
-      },
-      southIndianPorutham: response.south_indian || {},
-      raw: response
-    };
-
-    await vedicCache.set(cacheKey, result);
-    return result;
-  },
-
-  /**
-   * 3. Panchang (5 Limbs of Time, Tithi, Nakshatra, Yoga, Karana, Choghadiya)
-   */
-  async getPanchang(date, latitude, longitude, timezone, place = '') {
-    if (!date || latitude === undefined || longitude === undefined || timezone === undefined) {
-      throw new AppError('Date (YYYY-MM-DD), latitude, longitude, and timezone are required for Panchang.', 400);
-    }
-
-    const payload = {
-      date: date.trim(),
-      latitude: Number(latitude),
-      longitude: Number(longitude),
-      timezone: Number(timezone),
-      place: place.trim(),
-      ayanamsa_mode: 'LAHIRI'
-    };
-
-    const cacheKey = vedicCache.generateKey('panchang', payload);
+    const cacheKey = vedicCache.generateKey('marriage_match', payload);
     const cached = await vedicCache.get(cacheKey);
     if (cached) return cached;
 
-    // Cache for 6 hours (panchang is daily)
-    const response = await postToEngine('/panchang', payload);
-    const result = response.panchang || response;
-    await vedicCache.set(cacheKey, result, 60 * 60 * 6);
-    return result;
+    const response = await postToEngine('/marriage-match', payload);
+
+    await vedicCache.set(cacheKey, response, TTL.ONE_DAY);
+    return response;
   },
 
   /**
-   * 4. Saturn Transit & Shani Sade Sati Timeline
+   * 3. POST /saturn-timeline — Sade Sati and Saturn timeline
    */
-  async getSaturnTimeline(rawParams) {
-    const birthDetails = normalizeBirthDetails(rawParams);
+  async getSaturnTimeline(params) {
+    const birthDetails = normalizeBirthDetails(params);
     const cacheKey = vedicCache.generateKey('saturn_timeline', birthDetails);
 
     const cached = await vedicCache.get(cacheKey);
     if (cached) return cached;
 
     const response = await postToEngine('/saturn-timeline', birthDetails);
-    await vedicCache.set(cacheKey, response);
+
+    await vedicCache.set(cacheKey, response, TTL.ONE_DAY);
     return response;
   },
 
   /**
-   * 5. Gochara (Current Planetary Transits relative to natal Moon/Ascendant)
+   * 4. POST /surya-siddhanta — Surya Siddhanta chart
    */
-  async getGochara(rawParams, targetDate = null) {
-    const birthDetails = normalizeBirthDetails(rawParams);
-    const payload = {
-      ...birthDetails,
-      target_date: targetDate || new Date().toISOString().split('T')[0]
-    };
+  async getSuryaSiddhantaChart(params) {
+    const birthDetails = normalizeBirthDetails(params);
+    const cacheKey = vedicCache.generateKey('surya_siddhanta', birthDetails);
+
+    const cached = await vedicCache.get(cacheKey);
+    if (cached) return cached;
+
+    const response = await postToEngine('/surya-siddhanta', birthDetails);
+
+    await vedicCache.set(cacheKey, response, TTL.ONE_DAY);
+    return response;
+  },
+
+  /**
+   * 5. POST /gochara — Transits against a birth chart
+   */
+  async getGochara(params = {}, targetDateArg = null) {
+    const birthDetails = normalizeBirthDetails(params);
+    const target_date = params.target_date || targetDateArg || new Date().toISOString().split('T')[0];
+
+    const payload = pickOptionalFields(
+      params,
+      { ...birthDetails, target_date: String(target_date).trim() },
+      [
+        'target_time',
+        'node_type',
+        'include',
+        'event_place',
+        'event_latitude',
+        'event_longitude',
+        'event_timezone',
+        'event_elevation'
+      ]
+    );
 
     const cacheKey = vedicCache.generateKey('gochara', payload);
     const cached = await vedicCache.get(cacheKey);
     if (cached) return cached;
 
-    // Cache transits for 1 hour
     const response = await postToEngine('/gochara', payload);
-    await vedicCache.set(cacheKey, response, 60 * 60);
+
+    await vedicCache.set(cacheKey, response, TTL.ONE_HOUR);
     return response;
   },
 
   /**
-   * 6. Gochara Date Range (For annual/monthly horoscope forecasting)
+   * 6. POST /gochara/range — Transits day by day against a birth chart (max 60 days)
    */
-  async getGocharaRange(rawParams, fromDate, toDate) {
-    const birthDetails = normalizeBirthDetails(rawParams);
-    if (!fromDate || !toDate) {
-      throw new AppError('fromDate and toDate (YYYY-MM-DD) are required for gochara range.', 400);
+  async getGocharaRange(params = {}, fromDateArg = null, toDateArg = null) {
+    const birthDetails = normalizeBirthDetails(params);
+    const from_date = params.from_date || fromDateArg;
+    const to_date = params.to_date || toDateArg;
+
+    if (!from_date || !to_date) {
+      throw new AppError('from_date and to_date (YYYY-MM-DD) are required for gochara range.', 400);
     }
 
-    const payload = {
-      ...birthDetails,
-      from_date: fromDate,
-      to_date: toDate
-    };
+    const payload = pickOptionalFields(
+      params,
+      {
+        ...birthDetails,
+        from_date: String(from_date).trim(),
+        to_date: String(to_date).trim()
+      },
+      [
+        'time_of_day',
+        'include',
+        'event_place',
+        'event_latitude',
+        'event_longitude',
+        'event_timezone',
+        'event_elevation'
+      ]
+    );
 
     const cacheKey = vedicCache.generateKey('gochara_range', payload);
     const cached = await vedicCache.get(cacheKey);
     if (cached) return cached;
 
     const response = await postToEngine('/gochara/range', payload);
-    await vedicCache.set(cacheKey, response, 60 * 60 * 12);
+
+    await vedicCache.set(cacheKey, response, TTL.TWELVE_HOURS);
     return response;
   },
 
   /**
-   * 7. Muhurta (Find auspicious electional timing windows)
+   * 7. POST /gochar — Today's planetary positions (no birth chart required)
+   * Required: date, latitude, longitude, timezone
+   * Optional: place, ayanamsa_mode
    */
-  async getMuhurta(rawParams, eventType, fromDate, toDate) {
-    const birthDetails = normalizeBirthDetails(rawParams);
-    if (!eventType || !fromDate || !toDate) {
-      throw new AppError('eventType, fromDate, and toDate are required for Muhurta search.', 400);
+  async getGochar(params = {}) {
+    const { date, latitude, longitude, timezone, place = '', ayanamsa_mode } = params;
+
+    if (!date || latitude === undefined || longitude === undefined || timezone === undefined) {
+      throw new AppError('date (YYYY-MM-DD), latitude, longitude, and timezone are required for gochar.', 400);
     }
 
     const payload = {
-      ...birthDetails,
-      event_type: eventType,
-      from_date: fromDate,
-      to_date: toDate
-    };
-
-    const cacheKey = vedicCache.generateKey('muhurta', payload);
-    const cached = await vedicCache.get(cacheKey);
-    if (cached) return cached;
-
-    const response = await postToEngine('/muhurta', payload);
-    await vedicCache.set(cacheKey, response, 60 * 60 * 6);
-    return response;
-  },
-
-  /**
-   * 8. Location Autocomplete & Search (162K+ World Cities Index)
-   */
-  async searchLocation(query, limit = 10) {
-    if (!query || typeof query !== 'string') {
-      throw new AppError('Location query string is required.', 400);
-    }
-    const cleanQuery = query.trim();
-    if (cleanQuery.length < 2) return [];
-
-    const cacheKey = `astrotring:loc_search:${cleanQuery}:${limit}`;
-    const cached = await vedicCache.get(cacheKey);
-    if (cached) return cached;
-
-    const response = await getFromEngine('/location/autocomplete', { query: cleanQuery, limit });
-    const results = response.results || [];
-    await vedicCache.set(cacheKey, results, 60 * 60 * 24); // 24h cache for city locations
-    return results;
-  },
-
-  /**
-   * 9. Planet Ingress (Sign-change timing across a date range)
-   */
-  async getPlanetIngress(fromDate, toDate, planets = ['Saturn', 'Jupiter', 'Rahu', 'Ketu'], timezone = 5.5, ayanamsa = 'LAHIRI') {
-    if (!fromDate || !toDate) {
-      throw new AppError('fromDate and toDate (YYYY-MM-DD) are required for planet ingress.', 400);
-    }
-
-    const payload = {
-      from_date: fromDate,
-      to_date: toDate,
-      planets,
+      date: String(date).trim(),
+      latitude: Number(latitude),
+      longitude: Number(longitude),
       timezone: Number(timezone),
-      ayanamsa_mode: ayanamsa
+      place: String(place).trim()
     };
+
+    if (ayanamsa_mode) payload.ayanamsa_mode = String(ayanamsa_mode).trim();
+
+    const cacheKey = vedicCache.generateKey('gochar', payload);
+    const cached = await vedicCache.get(cacheKey);
+    if (cached) return cached;
+
+    const response = await postToEngine('/gochar', payload);
+
+    await vedicCache.set(cacheKey, response, TTL.SIX_HOURS);
+    return response;
+  },
+
+  /**
+   * 8. POST /gochar/events — Upcoming transit events over a date range (max 90 days, no birth chart required)
+   * Required: from_date, to_date, latitude, longitude, timezone
+   * Optional: place, planets, ayanamsa_mode
+   */
+  async getGocharEvents(params = {}) {
+    const { from_date, to_date, latitude, longitude, timezone, place = '', planets, ayanamsa_mode } = params;
+
+    if (
+      !from_date ||
+      !to_date ||
+      latitude === undefined ||
+      longitude === undefined ||
+      timezone === undefined
+    ) {
+      throw new AppError(
+        'from_date, to_date, latitude, longitude, and timezone are required for gochar events.',
+        400
+      );
+    }
+
+    const payload = {
+      from_date: String(from_date).trim(),
+      to_date: String(to_date).trim(),
+      latitude: Number(latitude),
+      longitude: Number(longitude),
+      timezone: Number(timezone),
+      place: String(place).trim()
+    };
+
+    if (Array.isArray(planets) && planets.length > 0) payload.planets = planets;
+    if (ayanamsa_mode) payload.ayanamsa_mode = String(ayanamsa_mode).trim();
+
+    const cacheKey = vedicCache.generateKey('gochar_events', payload);
+    const cached = await vedicCache.get(cacheKey);
+    if (cached) return cached;
+
+    const response = await postToEngine('/gochar/events', payload);
+
+    await vedicCache.set(cacheKey, response, TTL.SIX_HOURS);
+    return response;
+  },
+
+  /**
+   * 9. POST /planet-ingress — When a planet changes sign
+   * Required: from_date, to_date
+   * Optional: planets, timezone, ayanamsa_mode
+   */
+  async getPlanetIngress(fromDateOrParams, toDateArg, planetsArg, timezoneArg, ayanamsaArg) {
+    const params = typeof fromDateOrParams === 'object' && fromDateOrParams !== null
+      ? fromDateOrParams
+      : {
+          from_date: fromDateOrParams,
+          to_date: toDateArg,
+          planets: planetsArg,
+          timezone: timezoneArg,
+          ayanamsa_mode: ayanamsaArg
+        };
+
+    const { from_date, to_date, planets, timezone, ayanamsa_mode } = params;
+
+    if (!from_date || !to_date) {
+      throw new AppError('from_date and to_date (YYYY-MM-DD) are required for planet ingress.', 400);
+    }
+
+    const payload = {
+      from_date: String(from_date).trim(),
+      to_date: String(to_date).trim()
+    };
+
+    if (Array.isArray(planets) && planets.length > 0) payload.planets = planets;
+    if (timezone !== undefined && timezone !== null) payload.timezone = Number(timezone);
+    if (ayanamsa_mode) payload.ayanamsa_mode = String(ayanamsa_mode).trim();
 
     const cacheKey = vedicCache.generateKey('planet_ingress', payload);
     const cached = await vedicCache.get(cacheKey);
     if (cached) return cached;
 
     const response = await postToEngine('/planet-ingress', payload);
-    const result = response.planet_ingress || response;
-    await vedicCache.set(cacheKey, result, 60 * 60 * 24); // 24h cache
-    return result;
+
+    await vedicCache.set(cacheKey, response, TTL.ONE_DAY);
+    return response;
   },
 
   /**
-   * 10. Surya Siddhanta Chart (Traditional Makaranda sidereal positions)
+   * 10. POST /panchang — Daily panchang
+   * Required: date, latitude, longitude, timezone
+   * Optional: place, ayanamsa_mode
    */
-  async getSuryaSiddhantaChart(rawParams) {
-    const birthDetails = normalizeBirthDetails(rawParams);
+  async getPanchang(dateOrParams, latitudeArg, longitudeArg, timezoneArg, placeArg = '') {
+    const params = typeof dateOrParams === 'object' && dateOrParams !== null
+      ? dateOrParams
+      : {
+          date: dateOrParams,
+          latitude: latitudeArg,
+          longitude: longitudeArg,
+          timezone: timezoneArg,
+          place: placeArg
+        };
+
+    const { date, latitude, longitude, timezone, place = '', ayanamsa_mode } = params;
+
+    if (!date || latitude === undefined || longitude === undefined || timezone === undefined) {
+      throw new AppError(
+        'date (YYYY-MM-DD), latitude, longitude, and timezone are required for Panchang.',
+        400
+      );
+    }
+
     const payload = {
-      date: birthDetails.date,
-      time: birthDetails.time,
-      latitude: birthDetails.latitude,
-      longitude: birthDetails.longitude,
-      timezone: birthDetails.timezone,
-      place: birthDetails.place,
-      elevation: 0,
-      timezone_mode: 'auto',
-      ayanamsa_mode: 'LAHIRI'
+      date: String(date).trim(),
+      latitude: Number(latitude),
+      longitude: Number(longitude),
+      timezone: Number(timezone),
+      place: String(place).trim()
     };
 
-    const cacheKey = vedicCache.generateKey('surya_siddhanta', payload);
+    if (ayanamsa_mode) payload.ayanamsa_mode = String(ayanamsa_mode).trim();
+
+    const cacheKey = vedicCache.generateKey('panchang', payload);
     const cached = await vedicCache.get(cacheKey);
     if (cached) return cached;
 
-    const response = await postToEngine('/surya-siddhanta', payload);
-    const result = response.surya_siddhanta || response;
-    await vedicCache.set(cacheKey, result);
-    return result;
+    const response = await postToEngine('/panchang', payload);
+
+    await vedicCache.set(cacheKey, response, TTL.SIX_HOURS);
+    return response;
   },
 
   /**
-   * 11. List All Supported Divisional (Varga) Charts
+   * 11. POST /muhurta — Auspicious dates for an event (max 90 days)
+   * Required: date, time, latitude, longitude, timezone, event_type, from_date, to_date
    */
-  listDivisionalCharts() {
-    return [
-      { request_as: 'D-1', name: 'Rasi', purpose: 'the main birth chart — body, overall life, general analysis' },
-      { request_as: 'D-2', name: 'Hora', purpose: 'wealth, money, family resources' },
-      { request_as: 'D-3', name: 'Drekkana', purpose: 'siblings, courage, drive, energy' },
-      { request_as: 'D-4', name: 'Chaturthamsa', purpose: 'home, fixed property, land, fortune' },
-      { request_as: 'D-5', name: 'Panchamsa', purpose: 'fame, authority, power, spiritual merit' },
-      { request_as: 'D-6', name: 'Shashthamsa', purpose: 'health, disease, debts, enemies' },
-      { request_as: 'D-7', name: 'Saptamsa', purpose: 'children, progeny' },
-      { request_as: 'D-8', name: 'Ashtamsa', purpose: 'longevity, sudden events, obstacles' },
-      { request_as: 'D-9', name: 'Navamsa', purpose: 'marriage, spouse, dharma, and overall planetary strength' },
-      { request_as: 'D-10', name: 'Dasamsa', purpose: 'career, profession, status, achievements' },
-      { request_as: 'D-11', name: 'Rudramsa', purpose: 'gains, and death/destruction matters' },
-      { request_as: 'D-12', name: 'Dwadasamsa', purpose: 'parents, ancestry, lineage' },
-      { request_as: 'D-16', name: 'Shodasamsa', purpose: 'vehicles, luxuries, comforts, inner happiness' },
-      { request_as: 'D-20', name: 'Vimsamsa', purpose: 'spiritual practice, worship, religious life' },
-      { request_as: 'D-24', name: 'Chaturvimsamsa (Siddhamsa)', purpose: 'education, learning, knowledge' },
-      { request_as: 'D-27', name: 'Nakshatramsa (Bhamsa)', purpose: 'general strengths and weaknesses, vitality' },
-      { request_as: 'D-30', name: 'Trimsamsa', purpose: 'misfortunes, evils, character, troubles' },
-      { request_as: 'D-40', name: 'Khavedamsa', purpose: 'auspicious/inauspicious effects, maternal legacy' },
-      { request_as: 'D-45', name: 'Akshavedamsa', purpose: 'overall character, conduct, paternal legacy' },
-      { request_as: 'D-60', name: 'Shastiamsa', purpose: 'past-life karma, fine-tuning of all life matters' },
-      { request_as: 'D-81', name: 'Nava Navamsa', purpose: 'finer detail of marriage/dharma (sub-navamsa)' },
-      { request_as: 'D-108', name: 'Ashtottaramsa', purpose: 'fine detail, often spiritual / cumulative' },
-      { request_as: 'D-144', name: 'Dwadas-dwadasamsa', purpose: 'finest detail of lineage / ancestry' }
-    ];
-  }
-};
+  async getMuhurta(params = {}, eventTypeArg = null, fromDateArg = null, toDateArg = null) {
+    const birthDetails = normalizeBirthDetails(params);
+    const event_type = params.event_type || eventTypeArg;
+    const from_date = params.from_date || fromDateArg;
+    const to_date = params.to_date || toDateArg;
 
+    if (!event_type || !from_date || !to_date) {
+      throw new AppError('event_type, from_date, and to_date are required for Muhurta search.', 400);
+    }
+
+    const payload = pickOptionalFields(
+      params,
+      {
+        ...birthDetails,
+        event_type: String(event_type).trim(),
+        from_date: String(from_date).trim(),
+        to_date: String(to_date).trim()
+      },
+      [
+        'day_part_resolution_minutes',
+        'respect_inauspicious_windows',
+        'event_place',
+        'event_latitude',
+        'event_longitude',
+        'event_timezone',
+        'event_elevation'
+      ]
+    );
+
+    const cacheKey = vedicCache.generateKey('muhurta', payload);
+    const cached = await vedicCache.get(cacheKey);
+    if (cached) return cached;
+
+    const response = await postToEngine('/muhurta', payload);
+
+    await vedicCache.set(cacheKey, response, TTL.SIX_HOURS);
+    return response;
+  },
+
+  /**
+   * 12. GET /muhurta/events — Event types accepted by /muhurta
+   */
+  async getMuhurtaEvents() {
+    const cacheKey = 'astrotring:muhurta_events';
+    const cached = await vedicCache.get(cacheKey);
+    if (cached) return cached;
+
+    const response = await getFromEngine('/muhurta/events');
+
+    await vedicCache.set(cacheKey, response, TTL.SEVEN_DAYS);
+    return response;
+  },
+
+  /**
+   * 13. GET /location/search — Best match coordinates & UTC offset for a place name
+   */
+  async searchLocation(query) {
+    if (!query || typeof query !== 'string' || query.trim().length < 2) {
+      throw new AppError('Location query string (at least 2 characters) is required.', 400);
+    }
+
+    const cleanQuery = query.trim();
+    const cacheKey = `astrotring:loc_exact:${cleanQuery}`;
+    const cached = await vedicCache.get(cacheKey);
+    if (cached) return cached;
+
+    const response = await getFromEngine('/location/search', { query: cleanQuery });
+
+    await vedicCache.set(cacheKey, response, TTL.ONE_DAY);
+    return response;
+  },
+
+  /**
+   * 14. GET /location/autocomplete — Place suggestions as you type (up to 50)
+   */
+  async autocompleteLocation(query, limit = 10) {
+    if (!query || typeof query !== 'string') {
+      throw new AppError('Location query string is required.', 400);
+    }
+
+    const cleanQuery = query.trim();
+    if (cleanQuery.length < 2) return { query: cleanQuery, count: 0, results: [] };
+
+    const cacheKey = `astrotring:loc_autocomplete:${cleanQuery}:${limit}`;
+    const cached = await vedicCache.get(cacheKey);
+    if (cached) return cached;
+
+    const response = await getFromEngine('/location/autocomplete', {
+      query: cleanQuery,
+      limit: Number(limit)
+    });
+
+    await vedicCache.set(cacheKey, response, TTL.ONE_DAY);
+    return response;
+  },
+
+  /**
+   * 15. GET /health — Engine health check
+   */
+  async getHealth() {
+    const cacheKey = 'astrotring:engine_health';
+    const cached = await vedicCache.get(cacheKey);
+    if (cached) return cached;
+
+    const response = await getFromEngine('/health');
+
+    await vedicCache.set(cacheKey, response, TTL.ONE_MINUTE);
+    return response;
+  },
+
+  /**
+   * 16. List All 23 Supported Divisional (Varga) Charts (D-1 to D-144)
+   */
+ 
+  
+};
