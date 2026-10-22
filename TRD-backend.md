@@ -38,6 +38,12 @@ backend/
 ├── .env.example              # Environment variables template
 ├── package.json              # ES module manifest & scripts
 ├── server.js                 # HTTP server bootstrap & DB initialization
+├── ai/                       # LangGraph Tool-Calling Engine for Vaani & Astropedia
+│   ├── tools.js              # 5 Vedic astrology tools with plain JSON Schema
+│   ├── state.js              # VaaniStateAnnotation (messages, chartData, birthParams)
+│   ├── prompts.js            # System prompts & lightweight user profile generator
+│   ├── nodes.js              # agentNode, toolExecutorNode, routeAfterAgent
+│   └── graph.js              # Compiled StateGraph with MemorySaver checkpointer
 ├── config/
 │   └── db.js                 # Sequelize connection instance & pool settings
 ├── models/
@@ -46,26 +52,31 @@ backend/
 │   ├── Otp.js                # `otps` table definition
 │   ├── RefreshToken.js       # `refresh_tokens` table definition
 │   ├── BirthChart.js         # `birth_charts` table definition & chart data storage
-│   └── BirthDetail.js        # `birth_details` table definition (user profiles)
+│   ├── BirthDetail.js        # `birth_details` table definition (user profiles)
+│   ├── ChatThread.js         # `chat_threads` table definition
+│   └── ChatMessage.js        # `chat_messages` table definition
 ├── middleware/
-│   ├── auth.js               # Bearer JWT verification guard (`protect`)
+│   ├── auth.js               # Bearer JWT verification guard (`protect`, `optionalAuth`)
 │   ├── errorHandler.js       # Centralized error handler & response standardizer
 │   └── rateLimiter.js        # IP rate limiting configuration
 ├── controllers/
 │   ├── authController.js     # Auth endpoint handlers (send-otp, verify-otp, me)
 │   ├── onboardingController.js # Onboarding submission and status check
-│   └── vedicController.js    # Unified Vedic astrology & calculators controller
+│   ├── vedicController.js    # Unified Vedic astrology & calculators controller
+│   └── chatController.js     # Vaani & Astropedia SSE chat controller
 ├── services/
-│   └── vedicAstrologyService.js # Production client for Jagannatha Hora calculations & caching
+│   ├── vedicAstrologyService.js # Client for Jagannatha Hora calculations & Redis cache
+│   └── chatService.js        # Service delegating conversational turns to ai/graph.js
 ├── routes/
 │   ├── authRoutes.js         # Endpoint declarations under `/api/v1/auth`
 │   ├── onboardingRoutes.js   # Endpoint declarations under `/api/v1/onboarding`
-│   └── vedicRoutes.js        # Single unified endpoint tree under `/api/v1/vedic`
+│   ├── vedicRoutes.js        # Single unified endpoint tree under `/api/v1/vedic`
+│   └── chatRoutes.js         # Chat endpoints under `/api/v1/chat`
 └── utils/
     ├── appError.js           # Custom operational AppError class
     ├── asyncHandler.js       # Promise-based wrapper for async route handlers
     ├── bcrypt.js             # Hashing and comparison helpers
-    ├── cache.js              # Deterministic in-memory LRU cache with TTL
+    ├── cache.js              # Redis cache client with fallback
     ├── jwt.js                # Access & refresh token sign/verify utilities
     └── mailer.js             # Nodemailer transporter & HTML OTP dispatch
 ```
