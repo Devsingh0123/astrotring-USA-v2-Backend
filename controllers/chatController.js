@@ -1,30 +1,36 @@
-import { ChatThread, ChatMessage, BirthDetail, BirthChart } from '../models/index.js';
-import { chatService } from '../services/chatService.js';
-import { AppError } from '../utils/appError.js';
-import { asyncHandler } from '../utils/asyncHandler.js';
+import {
+  ChatThread,
+  ChatMessage,
+  BirthDetail,
+  BirthChart,
+} from "../models/index.js";
+import { chatService } from "../services/chatService.js";
+import { AppError } from "../utils/appError.js";
+import { asyncHandler } from "../utils/asyncHandler.js";
 
 /**
  * Default promotional offer shown inside Vaani chat when a user's question quota reaches 0.
  * Matches the exact shape rendered by `frontend/src/features/vaani/components/VaaniChatConversation.jsx`.
  */
 const ZERO_CREDIT_OFFER = {
-  title: 'Get 12 questions at 67% discount',
-  description: 'Your question balance is ZERO. Buy 12 questions at 67% off. Promo code: QUICKGOLD',
-  promoCode: 'QUICKGOLD',
+  title: "Get 12 questions at 67% discount",
+  description:
+    "Your question balance is ZERO. Buy 12 questions at 67% off. Promo code: QUICKGOLD",
+  promoCode: "QUICKGOLD",
   discountPercent: 67,
   questionsCount: 12,
-  originalPrice: '$29.99',
-  discountedPrice: '$9.99'
+  originalPrice: "$29.99",
+  discountedPrice: "$9.99",
 };
 
 /**
  * Helper: Configures HTTP response headers for Server-Sent Events (SSE)
  */
 const initSseStream = (res) => {
-  res.setHeader('Content-Type', 'text/event-stream; charset=utf-8');
-  res.setHeader('Cache-Control', 'no-cache, no-transform');
-  res.setHeader('Connection', 'keep-alive');
-  res.setHeader('X-Accel-Buffering', 'no');
+  res.setHeader("Content-Type", "text/event-stream; charset=utf-8");
+  res.setHeader("Cache-Control", "no-cache, no-transform");
+  res.setHeader("Connection", "keep-alive");
+  res.setHeader("X-Accel-Buffering", "no");
   res.flushHeaders?.();
 };
 
@@ -43,7 +49,7 @@ const sendSseEvent = (res, eventName, data) => {
  * or SSE streaming (default: true).
  */
 const shouldUseSse = (req) => {
-  if (req.body?.stream === false || req.query?.stream === 'false') {
+  if (req.body?.stream === false || req.query?.stream === "false") {
     return false;
   }
   return true;
@@ -61,8 +67,10 @@ export const consultVaani = asyncHandler(async (req, res, next) => {
   const rawQuery = req.body.query || req.body.question;
   const { threadId, chartId } = req.body;
 
-  if (!rawQuery || typeof rawQuery !== 'string' || !rawQuery.trim()) {
-    return next(new AppError('Please provide a question (`query`) for Vaani.', 400));
+  if (!rawQuery || typeof rawQuery !== "string" || !rawQuery.trim()) {
+    return next(
+      new AppError("Please provide a question (`query`) for Vaani.", 400),
+    );
   }
   const question = rawQuery.trim();
 
@@ -70,11 +78,12 @@ export const consultVaani = asyncHandler(async (req, res, next) => {
   if (user.credit_balance <= 0) {
     return res.status(402).json({
       success: false,
-      message: 'Your question balance is empty. Please purchase a question pack to consult Vaani.',
+      message:
+        "Your question balance is empty. Please purchase a question pack to consult Vaani.",
       data: {
         creditsRemaining: 0,
-        offer: ZERO_CREDIT_OFFER
-      }
+        offer: ZERO_CREDIT_OFFER,
+      },
     });
   }
 
@@ -84,13 +93,15 @@ export const consultVaani = asyncHandler(async (req, res, next) => {
 
   if (chartId) {
     birthChart = await BirthChart.findByPk(chartId);
-    birthDetail = await BirthDetail.findOne({ where: { user_id: user.id, chart_id: chartId } });
+    birthDetail = await BirthDetail.findOne({
+      where: { user_id: user.id, chart_id: chartId },
+    });
   }
 
   if (!birthDetail) {
     birthDetail = await BirthDetail.findOne({
       where: { user_id: user.id, is_primary: true },
-      include: [{ model: BirthChart, as: 'chart' }]
+      include: [{ model: BirthChart, as: "chart" }],
     });
     if (birthDetail?.chart && !birthChart) {
       birthChart = birthDetail.chart;
@@ -100,9 +111,9 @@ export const consultVaani = asyncHandler(async (req, res, next) => {
   if (!birthDetail && !birthChart) {
     return next(
       new AppError(
-        'Birth details not found. Please complete onboarding so Vaani can read your birth chart.',
-        400
-      )
+        "Birth details not found. Please complete onboarding so Vaani can read your birth chart.",
+        400,
+      ),
     );
   }
 
@@ -112,12 +123,12 @@ export const consultVaani = asyncHandler(async (req, res, next) => {
 
   if (threadId) {
     thread = await ChatThread.findOne({
-      where: { id: threadId, user_id: user.id, engine: 'vaani' }
+      where: { id: threadId, user_id: user.id, engine: "vaani" },
     });
     if (thread) {
       priorMessages = await ChatMessage.findAll({
         where: { thread_id: thread.id },
-        order: [['created_at', 'ASC']]
+        order: [["created_at", "ASC"]],
       });
     }
   }
@@ -126,49 +137,55 @@ export const consultVaani = asyncHandler(async (req, res, next) => {
     thread = await ChatThread.create({
       user_id: user.id,
       chart_id: birthChart?.id || birthDetail?.chart_id || null,
-      engine: 'vaani',
-      title: question.length > 120 ? `${question.slice(0, 117)}...` : question
+      engine: "vaani",
+      title: question.length > 120 ? `${question.slice(0, 117)}...` : question,
     });
   }
 
   // 4. Persist the user's question in `chat_messages`
   await ChatMessage.create({
     thread_id: thread.id,
-    role: 'user',
+    role: "user",
     content: question,
     tokens_used: 0,
-    credits_debited: 0
+    credits_debited: 0,
   });
 
   const isSse = shouldUseSse(req);
   if (isSse) {
     initSseStream(res);
-    sendSseEvent(res, 'thinking', { step: 'Reading your birth chart...' });
+    sendSseEvent(res, "thinking", { step: "Reading your birth chart..." });
   }
 
   try {
-    // 5. Build the zero-hallucination Astronomical Fact Sheet from `vedicAstrologyService`
-    const chartFactSheet = await chatService.prepareVaaniChartContext({
-      birthDetail,
-      chartRecord: birthChart
-    });
+    // 5. Prepare the user's birth chart context for on-demand tool execution
+    const { chartData, birthParams, userSummary } =
+      await chatService.prepareVaaniChartContext({
+        birthDetail,
+        chartRecord: birthChart,
+      });
 
-    const userName = birthDetail?.full_name || birthChart?.person_name || user.email.split('@')[0];
+    const userName =
+      birthDetail?.full_name ||
+      birthChart?.person_name ||
+      user.email.split("@")[0];
 
     // 6. Execute stateful LangGraph turn with live token callbacks
     const { reading, tokensUsed } = await chatService.runChatTurn({
       threadId: thread.id,
-      engine: 'vaani',
+      engine: "vaani",
       question,
       userName,
-      chartFactSheet,
+      userSummary,
+      chartData,
+      birthParams,
       priorMessages,
       onThinking: (step) => {
-        if (isSse) sendSseEvent(res, 'thinking', { step });
+        if (isSse) sendSseEvent(res, "thinking", { step });
       },
       onToken: (text) => {
-        if (isSse) sendSseEvent(res, 'token', { text });
-      }
+        if (isSse) sendSseEvent(res, "token", { text });
+      },
     });
 
     // 7. Deduct 1 credit after successful generation
@@ -183,62 +200,62 @@ export const consultVaani = asyncHandler(async (req, res, next) => {
       paragraphs: reading.paragraphs,
       astrologyBehind: reading.astrologyBehind,
       suggestedQuestions: reading.suggestedQuestions,
-      offer
+      offer,
     };
 
     // 8. Save assistant reading to `chat_messages` and touch thread timestamp
     const assistantMsg = await ChatMessage.create({
       thread_id: thread.id,
-      role: 'assistant',
-      content: reading.paragraphs.join('\n\n'),
+      role: "assistant",
+      content: reading.paragraphs.join("\n\n"),
       structured_data: structuredPayload,
       tokens_used: tokensUsed,
-      credits_debited: 1
+      credits_debited: 1,
     });
 
-    thread.changed('updated_at', true);
+    thread.changed("updated_at", true);
     await thread.save();
 
     // Format reading item to match `frontend/src/features/vaani/components/VaaniChatConversation.jsx`
     const readingResponse = {
       id: assistantMsg.id,
       threadId: thread.id,
-      engine: 'vaani',
+      engine: "vaani",
       question,
       createdAt: assistantMsg.created_at,
       ...structuredPayload,
-      feedback: null
+      feedback: null,
     };
 
     if (isSse) {
-      sendSseEvent(res, 'metadata', {
+      sendSseEvent(res, "metadata", {
         threadId: thread.id,
         openingThought: reading.openingThought,
-        thinkingSteps: reading.thinkingSteps
+        thinkingSteps: reading.thinkingSteps,
       });
-      sendSseEvent(res, 'done', {
+      sendSseEvent(res, "done", {
         threadId: thread.id,
         messageId: assistantMsg.id,
         creditsRemaining: user.credit_balance,
-        reading: readingResponse
+        reading: readingResponse,
       });
       return res.end();
     }
 
     return res.status(200).json({
       success: true,
-      message: 'Vaani consultation completed.',
+      message: "Vaani consultation completed.",
       data: {
         threadId: thread.id,
         messageId: assistantMsg.id,
         creditsRemaining: user.credit_balance,
-        reading: readingResponse
-      }
+        reading: readingResponse,
+      },
     });
   } catch (error) {
     if (isSse) {
-      sendSseEvent(res, 'error', {
-        message: error.message || 'Failed to generate Vaani reading.'
+      sendSseEvent(res, "error", {
+        message: error.message || "Failed to generate Vaani reading.",
       });
       return res.end();
     }
@@ -258,8 +275,10 @@ export const consultAstropedia = asyncHandler(async (req, res, next) => {
   const rawQuery = req.body.query || req.body.question;
   const { threadId } = req.body;
 
-  if (!rawQuery || typeof rawQuery !== 'string' || !rawQuery.trim()) {
-    return next(new AppError('Please provide a question (`query`) for Astropedia.', 400));
+  if (!rawQuery || typeof rawQuery !== "string" || !rawQuery.trim()) {
+    return next(
+      new AppError("Please provide a question (`query`) for Astropedia.", 400),
+    );
   }
   const question = rawQuery.trim();
 
@@ -268,14 +287,14 @@ export const consultAstropedia = asyncHandler(async (req, res, next) => {
   let priorMessages = [];
 
   if (threadId) {
-    const whereClause = { id: threadId, engine: 'astropedia' };
+    const whereClause = { id: threadId, engine: "astropedia" };
     if (user) whereClause.user_id = user.id;
 
     thread = await ChatThread.findOne({ where: whereClause });
     if (thread) {
       priorMessages = await ChatMessage.findAll({
         where: { thread_id: thread.id },
-        order: [['created_at', 'ASC']]
+        order: [["created_at", "ASC"]],
       });
     }
   }
@@ -284,41 +303,43 @@ export const consultAstropedia = asyncHandler(async (req, res, next) => {
     thread = await ChatThread.create({
       user_id: user ? user.id : null,
       chart_id: null,
-      engine: 'astropedia',
-      title: question.length > 120 ? `${question.slice(0, 117)}...` : question
+      engine: "astropedia",
+      title: question.length > 120 ? `${question.slice(0, 117)}...` : question,
     });
   }
 
   // 2. Save user question in `chat_messages`
   await ChatMessage.create({
     thread_id: thread.id,
-    role: 'user',
+    role: "user",
     content: question,
     tokens_used: 0,
-    credits_debited: 0
+    credits_debited: 0,
   });
 
   const isSse = shouldUseSse(req);
   if (isSse) {
     initSseStream(res);
-    sendSseEvent(res, 'thinking', { step: 'Consulting classical Vedic texts...' });
+    sendSseEvent(res, "thinking", {
+      step: "Consulting classical Vedic texts...",
+    });
   }
 
   try {
     // 3. Execute stateful LangGraph turn in Astropedia mode
     const { reading, tokensUsed } = await chatService.runChatTurn({
       threadId: thread.id,
-      engine: 'astropedia',
+      engine: "astropedia",
       question,
-      userName: 'Seeker',
-      chartFactSheet: '',
+      userName: "Seeker",
+      chartFactSheet: "",
       priorMessages,
       onThinking: (step) => {
-        if (isSse) sendSseEvent(res, 'thinking', { step });
+        if (isSse) sendSseEvent(res, "thinking", { step });
       },
       onToken: (text) => {
-        if (isSse) sendSseEvent(res, 'token', { text });
-      }
+        if (isSse) sendSseEvent(res, "token", { text });
+      },
     });
 
     const structuredPayload = {
@@ -327,61 +348,61 @@ export const consultAstropedia = asyncHandler(async (req, res, next) => {
       paragraphs: reading.paragraphs,
       astrologyBehind: reading.astrologyBehind,
       suggestedQuestions: reading.suggestedQuestions,
-      offer: null
+      offer: null,
     };
 
     // 4. Save assistant answer in `chat_messages`
     const assistantMsg = await ChatMessage.create({
       thread_id: thread.id,
-      role: 'assistant',
-      content: reading.paragraphs.join('\n\n'),
+      role: "assistant",
+      content: reading.paragraphs.join("\n\n"),
       structured_data: structuredPayload,
       tokens_used: tokensUsed,
-      credits_debited: 0
+      credits_debited: 0,
     });
 
-    thread.changed('updated_at', true);
+    thread.changed("updated_at", true);
     await thread.save();
 
     const readingResponse = {
       id: assistantMsg.id,
       threadId: thread.id,
-      engine: 'astropedia',
+      engine: "astropedia",
       question,
       createdAt: assistantMsg.created_at,
       ...structuredPayload,
-      feedback: null
+      feedback: null,
     };
 
     if (isSse) {
-      sendSseEvent(res, 'metadata', {
+      sendSseEvent(res, "metadata", {
         threadId: thread.id,
         openingThought: reading.openingThought,
-        thinkingSteps: reading.thinkingSteps
+        thinkingSteps: reading.thinkingSteps,
       });
-      sendSseEvent(res, 'done', {
+      sendSseEvent(res, "done", {
         threadId: thread.id,
         messageId: assistantMsg.id,
         creditsRemaining: user ? user.credit_balance : null,
-        reading: readingResponse
+        reading: readingResponse,
       });
       return res.end();
     }
 
     return res.status(200).json({
       success: true,
-      message: 'Astropedia consultation completed.',
+      message: "Astropedia consultation completed.",
       data: {
         threadId: thread.id,
         messageId: assistantMsg.id,
         creditsRemaining: user ? user.credit_balance : null,
-        reading: readingResponse
-      }
+        reading: readingResponse,
+      },
     });
   } catch (error) {
     if (isSse) {
-      sendSseEvent(res, 'error', {
-        message: error.message || 'Failed to generate Astropedia answer.'
+      sendSseEvent(res, "error", {
+        message: error.message || "Failed to generate Astropedia answer.",
       });
       return res.end();
     }
@@ -398,7 +419,7 @@ export const getUserThreads = asyncHandler(async (req, res) => {
   const { engine } = req.query;
   const whereClause = { user_id: req.user.id };
 
-  if (engine && ['vaani', 'astropedia'].includes(engine.toLowerCase())) {
+  if (engine && ["vaani", "astropedia"].includes(engine.toLowerCase())) {
     whereClause.engine = engine.toLowerCase();
   }
 
@@ -407,13 +428,20 @@ export const getUserThreads = asyncHandler(async (req, res) => {
     include: [
       {
         model: ChatMessage,
-        as: 'messages',
-        attributes: ['id', 'role', 'content', 'structured_data', 'feedback', 'created_at'],
+        as: "messages",
+        attributes: [
+          "id",
+          "role",
+          "content",
+          "structured_data",
+          "feedback",
+          "created_at",
+        ],
         separate: true,
-        order: [['created_at', 'ASC']]
-      }
+        order: [["created_at", "ASC"]],
+      },
     ],
-    order: [['updated_at', 'DESC']]
+    order: [["updated_at", "DESC"]],
   });
 
   const formattedThreads = threads.map((t) => ({
@@ -423,13 +451,13 @@ export const getUserThreads = asyncHandler(async (req, res) => {
     chartId: t.chart_id,
     messageCount: t.messages?.length || 0,
     lastMessageAt: t.updated_at,
-    createdAt: t.created_at
+    createdAt: t.created_at,
   }));
 
   res.status(200).json({
     success: true,
     count: formattedThreads.length,
-    threads: formattedThreads
+    threads: formattedThreads,
   });
 });
 
@@ -445,15 +473,15 @@ export const getThreadById = asyncHandler(async (req, res, next) => {
     include: [
       {
         model: ChatMessage,
-        as: 'messages',
+        as: "messages",
         separate: true,
-        order: [['created_at', 'ASC']]
-      }
-    ]
+        order: [["created_at", "ASC"]],
+      },
+    ],
   });
 
   if (!thread) {
-    return next(new AppError('Conversation thread not found.', 404));
+    return next(new AppError("Conversation thread not found.", 404));
   }
 
   // Pair user questions with their corresponding assistant readings for easy frontend hydration
@@ -462,8 +490,9 @@ export const getThreadById = asyncHandler(async (req, res, next) => {
 
   for (let i = 0; i < messages.length; i++) {
     const msg = messages[i];
-    if (msg.role === 'assistant') {
-      const prevUserMsg = i > 0 && messages[i - 1].role === 'user' ? messages[i - 1] : null;
+    if (msg.role === "assistant") {
+      const prevUserMsg =
+        i > 0 && messages[i - 1].role === "user" ? messages[i - 1] : null;
       const structured = msg.structured_data || {};
 
       readings.push({
@@ -472,13 +501,13 @@ export const getThreadById = asyncHandler(async (req, res, next) => {
         engine: thread.engine,
         question: prevUserMsg ? prevUserMsg.content : thread.title,
         createdAt: msg.created_at,
-        openingThought: structured.openingThought || '',
+        openingThought: structured.openingThought || "",
         thinkingSteps: structured.thinkingSteps || [],
         paragraphs: structured.paragraphs || [msg.content],
         astrologyBehind: structured.astrologyBehind || [],
         suggestedQuestions: structured.suggestedQuestions || [],
         offer: structured.offer || null,
-        feedback: msg.feedback
+        feedback: msg.feedback,
       });
     }
   }
@@ -492,7 +521,7 @@ export const getThreadById = asyncHandler(async (req, res, next) => {
         engine: thread.engine,
         chartId: thread.chart_id,
         createdAt: thread.created_at,
-        updatedAt: thread.updated_at
+        updatedAt: thread.updated_at,
       },
       messages: messages.map((m) => ({
         id: m.id,
@@ -502,10 +531,10 @@ export const getThreadById = asyncHandler(async (req, res, next) => {
         feedback: m.feedback,
         tokensUsed: m.tokens_used,
         creditsDebited: m.credits_debited,
-        createdAt: m.created_at
+        createdAt: m.created_at,
       })),
-      readings
-    }
+      readings,
+    },
   });
 });
 
@@ -517,13 +546,13 @@ export const updateMessageFeedback = asyncHandler(async (req, res, next) => {
   const { messageId } = req.params;
   const { feedback } = req.body;
 
-  if (!['yes', 'no'].includes(feedback)) {
+  if (!["yes", "no"].includes(feedback)) {
     return next(new AppError('Feedback must be either "yes" or "no".', 400));
   }
 
   const message = await ChatMessage.findByPk(messageId);
   if (!message) {
-    return next(new AppError('Chat message not found.', 404));
+    return next(new AppError("Chat message not found.", 404));
   }
 
   message.feedback = feedback;
@@ -531,11 +560,11 @@ export const updateMessageFeedback = asyncHandler(async (req, res, next) => {
 
   res.status(200).json({
     success: true,
-    message: 'Feedback recorded successfully.',
+    message: "Feedback recorded successfully.",
     data: {
       messageId: message.id,
-      feedback: message.feedback
-    }
+      feedback: message.feedback,
+    },
   });
 });
 
@@ -547,17 +576,17 @@ export const deleteThread = asyncHandler(async (req, res, next) => {
   const { threadId } = req.params;
 
   const thread = await ChatThread.findOne({
-    where: { id: threadId, user_id: req.user.id }
+    where: { id: threadId, user_id: req.user.id },
   });
 
   if (!thread) {
-    return next(new AppError('Conversation thread not found.', 404));
+    return next(new AppError("Conversation thread not found.", 404));
   }
 
   await thread.destroy();
 
   res.status(200).json({
     success: true,
-    message: 'Conversation thread deleted successfully.'
+    message: "Conversation thread deleted successfully.",
   });
 });
