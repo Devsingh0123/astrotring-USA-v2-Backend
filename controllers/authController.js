@@ -43,6 +43,15 @@ export const sendOtp = asyncHandler(async (req, res, next) => {
   let user = await User.findOne({ where: { email: normalizedEmail } });
   let isNewUser = false;
 
+  if (user && user.is_blocked) {
+    return next(
+      new AppError(
+        "Your account has been suspended by an administrator. Please contact support.",
+        403
+      )
+    );
+  }
+
   if (!user) {
     user = await User.create({
       email: normalizedEmail,
@@ -126,6 +135,15 @@ export const verifyOtp = asyncHandler(async (req, res, next) => {
     return next(new AppError("No account found with this email.", 404));
   }
 
+  if (user.is_blocked) {
+    return next(
+      new AppError(
+        "Your account has been suspended by an administrator. Please contact support.",
+        403
+      )
+    );
+  }
+
   // Retrieve latest valid unexpired OTP
   const otpRecord = await Otp.findOne({
     where: {
@@ -204,6 +222,7 @@ export const verifyOtp = asyncHandler(async (req, res, next) => {
         creditBalance: user.credit_balance,
         reportCredits: user.report_credits,
         tier: user.tier,
+        isBlocked: user.is_blocked,
       },
     },
   });
@@ -254,6 +273,16 @@ export const refreshToken = asyncHandler(async (req, res, next) => {
   if (!user) {
     return next(
       new AppError("User belonging to this token no longer exists.", 401),
+    );
+  }
+
+  if (user.is_blocked) {
+    await matchingTokenRecord.destroy();
+    return next(
+      new AppError(
+        "Your account has been suspended by an administrator. Please contact support.",
+        403
+      )
     );
   }
 
@@ -345,6 +374,7 @@ export const getMe = asyncHandler(async (req, res, next) => {
         creditBalance: user.credit_balance,
         reportCredits: user.report_credits,
         tier: user.tier,
+        isBlocked: user.is_blocked,
         createdAt: user.created_at,
       },
       birthDetails: primaryBirthDetail

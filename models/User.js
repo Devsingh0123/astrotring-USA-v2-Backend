@@ -16,6 +16,10 @@ export const User = sequelize.define('User', {
       isEmail: true
     }
   },
+  password: {
+    type: DataTypes.STRING(255),
+    allowNull: true
+  },
   is_email_verified: {
     type: DataTypes.BOOLEAN,
     allowNull: false,
@@ -30,6 +34,11 @@ export const User = sequelize.define('User', {
     type: DataTypes.ENUM('user', 'admin'),
     allowNull: false,
     defaultValue: 'user'
+  },
+  is_blocked: {
+    type: DataTypes.BOOLEAN,
+    allowNull: false,
+    defaultValue: false
   },
   // Number of Vaani consultation credits available (every new user starts with 1 free question)
   credit_balance: {

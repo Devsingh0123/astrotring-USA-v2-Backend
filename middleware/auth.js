@@ -29,6 +29,15 @@ export const protect = asyncHandler(async (req, res, next) => {
     return next(new AppError('The user belonging to this token no longer exists.', 401));
   }
 
+  if (currentUser.is_blocked) {
+    return next(
+      new AppError(
+        'Your account has been suspended by an administrator. Please contact support.',
+        403
+      )
+    );
+  }
+
   req.user = currentUser;
   next();
 });
@@ -54,7 +63,7 @@ export const optionalAuth = asyncHandler(async (req, res, next) => {
   try {
     const decoded = verifyAccessToken(token);
     const currentUser = await User.findByPk(decoded.id);
-    if (currentUser) {
+    if (currentUser && !currentUser.is_blocked) {
       req.user = currentUser;
     }
   } catch {
