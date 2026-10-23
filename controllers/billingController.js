@@ -1,5 +1,5 @@
 import { Op } from 'sequelize';
-import { Invoice, Order } from '../models/index.js';
+import { Invoice, Order, QuestionPack, Coupon } from '../models/index.js';
 import {
   BILLING_CATALOG,
   DEFAULT_COUPONS,
@@ -19,6 +19,7 @@ import { asyncHandler } from '../utils/asyncHandler.js';
 
 /**
  * 1. GET /api/v1/billing/packs?currency=INR
+ * Fetches dynamic question packs from database and report packs from catalog.
  */
 export const getPacksCatalog = asyncHandler(async (req, res) => {
   const currency = String(req.query.currency || 'INR').toUpperCase();
@@ -26,28 +27,56 @@ export const getPacksCatalog = asyncHandler(async (req, res) => {
     throw new AppError(`Unsupported currency "${currency}".`, 400);
   }
 
-  const questionPacks = [];
-  const reportPacks = [];
+  // Fetch all active question packs dynamically from DB
+  const activeQuestionPacks = await QuestionPack.findAll({
+    where: { is_active: true },
+    order: [
+      ['sort_order', 'ASC'],
+      ['credits', 'ASC']
+    ]
+  });
 
+  const questionPacks = activeQuestionPacks.map((pack) => {
+    const prices = pack.prices || {};
+    const priceTier = prices[currency] || prices['INR'] || {};
+    const originalPrice = Number(priceTier.originalPrice ?? priceTier.offerPrice ?? 0);
+    const offerPrice = Number(priceTier.offerPrice ?? originalPrice ?? 0);
+
+    return {
+      id: pack.code,
+      packDbId: pack.id,
+      code: pack.code,
+      tier: pack.tier,
+      name: pack.name,
+      title: pack.title || `${pack.name} Question Pack (${pack.credits} Questions)`,
+      productType: 'questions',
+      credits: pack.credits,
+      currency,
+      originalPrice,
+      offerPrice
+    };
+  });
+
+  const reportPacks = [];
   for (const product of Object.values(BILLING_CATALOG)) {
-    const priceTier = product.pricing[currency];
-    const item = {
+    const priceTier = product.pricing[currency] || product.pricing['INR'] || {};
+    reportPacks.push({
       id: product.id,
+      code: product.id,
       tier: product.tier,
       name: product.name,
       title: product.title,
       productType: product.productType,
       credits: product.credits,
       currency,
-      originalPrice: priceTier.originalPrice,
-      offerPrice: priceTier.offerPrice
-    };
+      originalPrice: Number(priceTier.originalPrice ?? priceTier.offerPrice ?? 0),
+      offerPrice: Number(priceTier.offerPrice ?? priceTier.originalPrice ?? 0)
+    });
+  }
 
-    if (product.productType === 'questions') {
-      questionPacks.push(item);
-    } else {
-      reportPacks.push(item);
-    }
+  let coupons = await Coupon.findAll({ where: { is_active: true } });
+  if (!coupons || coupons.length === 0) {
+    coupons = DEFAULT_COUPONS;
   }
 
   res.status(200).json({
@@ -57,7 +86,7 @@ export const getPacksCatalog = asyncHandler(async (req, res) => {
       currency,
       questionPacks,
       reportPacks,
-      coupons: DEFAULT_COUPONS
+      coupons
     }
   });
 });

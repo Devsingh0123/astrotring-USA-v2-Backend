@@ -21,50 +21,6 @@ export const SELLER_GST_INFO = {
 export const SUPPORTED_CURRENCIES = ["INR", "USD", "GBP", "EUR"];
 
 export const BILLING_CATALOG = {
-  // Question Packs (Vaani Chat Credits)
-  pack_silver_7: {
-    id: "pack_silver_7",
-    productType: "questions",
-    tier: "silver",
-    name: "Silver",
-    title: "Silver Question Pack (7 Questions)",
-    credits: 7,
-    pricing: {
-      INR: { originalPrice: 1399, offerPrice: 699 },
-      USD: { originalPrice: 14.99, offerPrice: 7.99 },
-      GBP: { originalPrice: 12.99, offerPrice: 6.99 },
-      EUR: { originalPrice: 13.99, offerPrice: 7.49 },
-    },
-  },
-  pack_gold_12: {
-    id: "pack_gold_12",
-    productType: "questions",
-    tier: "gold",
-    name: "Gold",
-    title: "Gold Question Pack (12 Questions)",
-    credits: 12,
-    pricing: {
-      INR: { originalPrice: 2399, offerPrice: 799 },
-      USD: { originalPrice: 29.99, offerPrice: 9.99 },
-      GBP: { originalPrice: 24.99, offerPrice: 8.49 },
-      EUR: { originalPrice: 27.99, offerPrice: 9.49 },
-    },
-  },
-  pack_diamond_20: {
-    id: "pack_diamond_20",
-    productType: "questions",
-    tier: "diamond",
-    name: "Diamond",
-    title: "Diamond Question Pack (20 Questions)",
-    credits: 20,
-    pricing: {
-      INR: { originalPrice: 3999, offerPrice: 1199 },
-      USD: { originalPrice: 49.99, offerPrice: 14.99 },
-      GBP: { originalPrice: 39.99, offerPrice: 12.99 },
-      EUR: { originalPrice: 44.99, offerPrice: 13.99 },
-    },
-  },
-
   // Report Packs (Report Credits)
   report_silver_1: {
     id: "report_silver_1",
