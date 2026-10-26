@@ -9,6 +9,8 @@ import onboardingRoutes from './routes/onboardingRoutes.js';
 import chatRoutes from './routes/chatRoutes.js';
 import billingRoutes from './routes/billingRoutes.js';
 import horoscopeRoutes from './routes/horoscopeRoutes.js';
+import reportRoutes from './routes/reportRoutes.js';
+import blogRoutes from './routes/blogRoutes.js';
 import { errorHandler } from './middleware/errorHandler.js';
 
 dotenv.config();
@@ -42,6 +44,8 @@ app.use('/api/v1/onboarding', onboardingRoutes);
 app.use('/api/v1/chat', chatRoutes);
 app.use('/api/v1/billing', billingRoutes);
 app.use('/api/v1/horoscopes', horoscopeRoutes);
+app.use('/api/v1/reports', reportRoutes);
+app.use('/api/v1/blogs', blogRoutes);
 
 // Unhandled Route Handler
 app.all('*', (req, res) => {

@@ -10,6 +10,8 @@ import { Invoice } from './Invoice.js';
 import { Coupon } from './Coupon.js';
 import { HoroscopeForecast } from './HoroscopeForecast.js';
 import { QuestionPack } from './QuestionPack.js';
+import { UserReport } from './UserReport.js';
+import { Blog } from './Blog.js';
 
 // User <-> Otp
 User.hasMany(Otp, { foreignKey: 'user_id', as: 'otps' });
@@ -55,6 +57,18 @@ Invoice.belongsTo(User, { foreignKey: 'user_id', as: 'user' });
 Order.hasOne(Invoice, { foreignKey: 'order_id', as: 'invoice' });
 Invoice.belongsTo(Order, { foreignKey: 'order_id', as: 'order' });
 
+// User <-> UserReport
+User.hasMany(UserReport, { foreignKey: 'user_id', as: 'reports' });
+UserReport.belongsTo(User, { foreignKey: 'user_id', as: 'user' });
+
+// BirthChart <-> UserReport
+BirthChart.hasMany(UserReport, { foreignKey: 'chart_id', as: 'reports' });
+UserReport.belongsTo(BirthChart, { foreignKey: 'chart_id', as: 'chart' });
+
+// User <-> Blog
+User.hasMany(Blog, { foreignKey: 'author_id', as: 'blogs' });
+Blog.belongsTo(User, { foreignKey: 'author_id', as: 'author' });
+
 export {
   User,
   Otp,
@@ -67,7 +81,9 @@ export {
   Invoice,
   Coupon,
   HoroscopeForecast,
-  QuestionPack
+  QuestionPack,
+  UserReport,
+  Blog
 };
 
 
