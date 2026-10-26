@@ -11,10 +11,10 @@ import {
   Order,
   Invoice,
   Coupon,
-  QuestionPack
+  QuestionPack,
+  ReportPack
 } from '../models/index.js';
 import {
-  BILLING_CATALOG,
   DEFAULT_COUPONS,
   SELLER_GST_INFO,
   SUPPORTED_CURRENCIES
@@ -71,7 +71,7 @@ export const computeGstBreakdown = (totalAmount, currency = 'INR', billingState 
 
 /**
  * Calculates server-verified pricing, coupon discount, and GST breakdown for a pack.
- * Dynamic: Reads question packs from QuestionPack model; fallbacks to BILLING_CATALOG for reports.
+ * Dynamic: Reads question packs from QuestionPack model and report packs from ReportPack model.
  */
 export const calculateOrderPricing = async ({
   packId,
@@ -113,22 +113,36 @@ export const calculateOrderPricing = async ({
       originalPrice: Number(priceTier.originalPrice ?? priceTier.offerPrice),
       offerPrice: Number(priceTier.offerPrice ?? priceTier.originalPrice)
     };
-  } else if (BILLING_CATALOG[packId]) {
-    // 2. Fallback to static catalog (for report packs)
-    const product = BILLING_CATALOG[packId];
-    const priceTier = product.pricing[normalizedCurrency] || product.pricing['INR'];
+  } else {
+    // 2. Look up in ReportPack model next (by UUID or code e.g. report_silver_1)
+    let reportPack = null;
+    if (isUuid) {
+      reportPack = await ReportPack.findOne({ where: { id: packId, is_active: true } });
+    }
+    if (!reportPack) {
+      reportPack = await ReportPack.findOne({ where: { code: packId, is_active: true } });
+    }
+
+    if (!reportPack) {
+      throw new AppError(`Invalid packId: "${packId}".`, 400);
+    }
+
+    const prices = reportPack.prices || {};
+    const priceTier = prices[normalizedCurrency] || prices['INR'];
+    if (!priceTier || (priceTier.offerPrice === undefined && priceTier.originalPrice === undefined)) {
+      throw new AppError(`Pricing not configured for currency "${normalizedCurrency}".`, 400);
+    }
+
     item = {
-      packId: product.id,
-      packDbId: product.id,
-      itemType: product.productType,
-      itemTitle: product.title,
-      tier: product.tier,
-      credits: product.credits,
+      packId: reportPack.code,
+      packDbId: reportPack.id,
+      itemType: 'report_pack',
+      itemTitle: reportPack.title || `${reportPack.name} Report Pack (${reportPack.credits} Report Credits)`,
+      tier: reportPack.tier,
+      credits: reportPack.credits,
       originalPrice: Number(priceTier.originalPrice ?? priceTier.offerPrice),
       offerPrice: Number(priceTier.offerPrice ?? priceTier.originalPrice)
     };
-  } else {
-    throw new AppError(`Invalid packId: "${packId}".`, 400);
   }
 
   const subtotal = item.originalPrice;
@@ -341,13 +355,19 @@ export const fulfillPaidOrder = async ({
       user.report_credits += order.credits_to_grant;
     }
 
-    let packTier = BILLING_CATALOG[order.product_code]?.tier;
-    if (!packTier) {
+    let packTier = null;
+    if (order.product_type === 'questions') {
       const qp = await QuestionPack.findOne({
         where: { code: order.product_code },
         transaction: t
       });
       packTier = qp?.tier;
+    } else {
+      const rp = await ReportPack.findOne({
+        where: { code: order.product_code },
+        transaction: t
+      });
+      packTier = rp?.tier;
     }
     if (packTier && TIER_RANK[packTier] > TIER_RANK[user.tier]) {
       user.tier = packTier;

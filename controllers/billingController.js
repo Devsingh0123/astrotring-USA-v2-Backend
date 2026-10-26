@@ -1,7 +1,6 @@
 import { Op } from 'sequelize';
-import { Invoice, Order, QuestionPack, Coupon } from '../models/index.js';
+import { Invoice, Order, QuestionPack, ReportPack, Coupon } from '../models/index.js';
 import {
-  BILLING_CATALOG,
   DEFAULT_COUPONS,
   SELLER_GST_INFO,
   SUPPORTED_CURRENCIES
@@ -57,22 +56,37 @@ export const getPacksCatalog = asyncHandler(async (req, res) => {
     };
   });
 
-  const reportPacks = [];
-  for (const product of Object.values(BILLING_CATALOG)) {
-    const priceTier = product.pricing[currency] || product.pricing['INR'] || {};
-    reportPacks.push({
-      id: product.id,
-      code: product.id,
-      tier: product.tier,
-      name: product.name,
-      title: product.title,
-      productType: product.productType,
-      credits: product.credits,
+  // Fetch all active report packs dynamically from DB
+  const activeReportPacks = await ReportPack.findAll({
+    where: { is_active: true },
+    order: [
+      ['sort_order', 'ASC'],
+      ['credits', 'ASC']
+    ]
+  });
+
+  const reportPacks = activeReportPacks.map((pack) => {
+    const prices = pack.prices || {};
+    const priceTier = prices[currency] || prices['INR'] || {};
+    const originalPrice = Number(priceTier.originalPrice ?? priceTier.offerPrice ?? 0);
+    const offerPrice = Number(priceTier.offerPrice ?? originalPrice ?? 0);
+
+    return {
+      id: pack.code,
+      packDbId: pack.id,
+      code: pack.code,
+      tier: pack.tier,
+      name: pack.name,
+      title: pack.title || `${pack.name} Report Pack (${pack.credits} Report Credits)`,
+      productType: 'report_pack',
+      credits: pack.credits,
       currency,
-      originalPrice: Number(priceTier.originalPrice ?? priceTier.offerPrice ?? 0),
-      offerPrice: Number(priceTier.offerPrice ?? priceTier.originalPrice ?? 0)
-    });
-  }
+      originalPrice,
+      offerPrice,
+      discountAmount: Math.max(0, originalPrice - offerPrice),
+      defaultPromoCode: 'VAULT'
+    };
+  });
 
   let coupons = await Coupon.findAll({ where: { is_active: true } });
   if (!coupons || coupons.length === 0) {

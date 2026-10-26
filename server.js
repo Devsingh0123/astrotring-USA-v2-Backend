@@ -60,10 +60,10 @@ app.use(errorHandler);
 
 const PORT = process.env.PORT || 5000;
 
-export const startServer = async () => {
+export const startServer = async (port = PORT) => {
   await connectDB();
-  return app.listen(PORT, () => {
-    console.log(`Server running in ${process.env.NODE_ENV || 'development'} on port ${PORT}`);
+  return app.listen(port, () => {
+    console.log(`Server running in ${process.env.NODE_ENV || 'development'} on port ${port}`);
   });
 };
 

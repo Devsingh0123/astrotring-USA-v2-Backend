@@ -10,6 +10,7 @@ import { Invoice } from './Invoice.js';
 import { Coupon } from './Coupon.js';
 import { HoroscopeForecast } from './HoroscopeForecast.js';
 import { QuestionPack } from './QuestionPack.js';
+import { ReportPack } from './ReportPack.js';
 import { UserReport } from './UserReport.js';
 import { Blog } from './Blog.js';
 
@@ -82,6 +83,7 @@ export {
   Coupon,
   HoroscopeForecast,
   QuestionPack,
+  ReportPack,
   UserReport,
   Blog
 };
