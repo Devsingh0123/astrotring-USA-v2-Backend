@@ -515,6 +515,7 @@ export const handleRazorpayWebhook = async (body, signature) => {
 
   const { event, payload } = body;
   const payment = payload?.payment?.entity;
+  const refund = payload?.refund?.entity;
 
   if (event === 'payment.captured' && payment?.order_id) {
     await fulfillPaidOrder({
@@ -529,39 +530,60 @@ export const handleRazorpayWebhook = async (body, signature) => {
       status: 'failed',
       reason: payment.error_description || 'Payment failed'
     });
-  } else if ((event === 'refund.created' || event === 'payment.refunded') && payment?.order_id) {
-    await sequelize.transaction(async (t) => {
-      const order = await Order.findOne({
-        where: { razorpay_order_id: payment.order_id },
-        lock: t.LOCK.UPDATE,
-        transaction: t
-      });
+  } else if (
+    event === 'refund.processed' ||
+    event === 'refund.created' ||
+    event === 'payment.refunded'
+  ) {
+    const razorpayOrderId = payment?.order_id;
+    const razorpayPaymentId = payment?.id || refund?.payment_id;
 
-      if (!order || order.status === 'refunded') return;
+    if (razorpayOrderId || razorpayPaymentId) {
+      await sequelize.transaction(async (t) => {
+        let order = null;
 
-      const user = await User.findByPk(order.user_id, {
-        lock: t.LOCK.UPDATE,
-        transaction: t
-      });
-
-      if (user && order.is_credited) {
-        if (order.product_type === 'questions') {
-          user.credit_balance = Math.max(0, user.credit_balance - order.credits_to_grant);
-        } else {
-          user.report_credits = Math.max(0, user.report_credits - order.credits_to_grant);
+        if (razorpayOrderId) {
+          order = await Order.findOne({
+            where: { razorpay_order_id: razorpayOrderId },
+            lock: t.LOCK.UPDATE,
+            transaction: t
+          });
         }
-        await user.save({ transaction: t });
-      }
 
-      order.status = 'refunded';
-      order.is_credited = false;
-      await order.save({ transaction: t });
+        if (!order && razorpayPaymentId) {
+          order = await Order.findOne({
+            where: { razorpay_payment_id: razorpayPaymentId },
+            lock: t.LOCK.UPDATE,
+            transaction: t
+          });
+        }
 
-      await Invoice.update(
-        { status: 'REFUNDED' },
-        { where: { order_id: order.id }, transaction: t }
-      );
-    });
+        if (!order || order.status === 'refunded') return;
+
+        const user = await User.findByPk(order.user_id, {
+          lock: t.LOCK.UPDATE,
+          transaction: t
+        });
+
+        if (user && order.is_credited) {
+          if (order.product_type === 'questions') {
+            user.credit_balance = Math.max(0, user.credit_balance - order.credits_to_grant);
+          } else {
+            user.report_credits = Math.max(0, user.report_credits - order.credits_to_grant);
+          }
+          await user.save({ transaction: t });
+        }
+
+        order.status = 'refunded';
+        order.is_credited = false;
+        await order.save({ transaction: t });
+
+        await Invoice.update(
+          { status: 'REFUNDED' },
+          { where: { order_id: order.id }, transaction: t }
+        );
+      });
+    }
   }
 
   return { received: true, event };
