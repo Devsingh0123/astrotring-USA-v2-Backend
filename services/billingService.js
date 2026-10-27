@@ -32,12 +32,13 @@ const razorpay = new Razorpay({
 const TIER_RANK = { free: 0, silver: 1, gold: 2, diamond: 3 };
 
 /**
- * Computes GST breakdown (18% GST inclusive for INR; 0% tax for international currencies).
+ * Computes GST breakdown (18% GST inclusive for INR; 0% tax for international USD).
  */
 export const computeGstBreakdown = (totalAmount, currency = 'INR', billingState = 'Delhi') => {
   const total = Number(Number(totalAmount).toFixed(2));
+  const normalizedCurrency = String(currency || 'INR').trim().toUpperCase();
 
-  if (currency !== 'INR') {
+  if (normalizedCurrency !== 'INR') {
     return {
       taxableAmount: total,
       cgst: 0,
@@ -79,9 +80,9 @@ export const calculateOrderPricing = async ({
   couponCode = null,
   billingState = 'Delhi'
 }) => {
-  const normalizedCurrency = String(currency).toUpperCase();
+  const normalizedCurrency = String(currency || 'INR').trim().toUpperCase();
   if (!SUPPORTED_CURRENCIES.includes(normalizedCurrency)) {
-    throw new AppError(`Unsupported currency: "${currency}".`, 400);
+    throw new AppError(`Unsupported currency: "${currency}". AstroTring strictly supports only: ${SUPPORTED_CURRENCIES.join(', ')}.`, 400);
   }
 
   // 1. Look up in QuestionPack model first (by UUID or code e.g. pack_gold_12)
@@ -98,9 +99,9 @@ export const calculateOrderPricing = async ({
 
   if (questionPack) {
     const prices = questionPack.prices || {};
-    const priceTier = prices[normalizedCurrency] || prices['INR'];
+    const priceTier = prices[normalizedCurrency];
     if (!priceTier || (priceTier.offerPrice === undefined && priceTier.originalPrice === undefined)) {
-      throw new AppError(`Pricing not configured for currency "${normalizedCurrency}".`, 400);
+      throw new AppError(`Pricing for currency "${normalizedCurrency}" is not configured for pack "${questionPack.title || questionPack.name}".`, 400);
     }
 
     item = {
@@ -128,9 +129,9 @@ export const calculateOrderPricing = async ({
     }
 
     const prices = reportPack.prices || {};
-    const priceTier = prices[normalizedCurrency] || prices['INR'];
+    const priceTier = prices[normalizedCurrency];
     if (!priceTier || (priceTier.offerPrice === undefined && priceTier.originalPrice === undefined)) {
-      throw new AppError(`Pricing not configured for currency "${normalizedCurrency}".`, 400);
+      throw new AppError(`Pricing for currency "${normalizedCurrency}" is not configured for pack "${reportPack.title || reportPack.name}".`, 400);
     }
 
     item = {

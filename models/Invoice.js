@@ -64,11 +64,17 @@ export const Invoice = sequelize.define('Invoice', {
     allowNull: false,
     defaultValue: '998431'
   },
-  // Financial & Tax Breakdown
+  // Financial & Tax Breakdown (Strictly 'INR' or 'USD')
   currency: {
     type: DataTypes.STRING(10),
     allowNull: false,
-    defaultValue: 'INR'
+    defaultValue: 'INR',
+    validate: {
+      isIn: {
+        args: [['INR', 'USD']],
+        msg: 'Currency must be either INR or USD'
+      }
+    }
   },
   subtotal: {
     type: DataTypes.DECIMAL(10, 2),

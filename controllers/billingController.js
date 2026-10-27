@@ -21,9 +21,9 @@ import { asyncHandler } from '../utils/asyncHandler.js';
  * Fetches dynamic question packs from database and report packs from catalog.
  */
 export const getPacksCatalog = asyncHandler(async (req, res) => {
-  const currency = String(req.query.currency || 'INR').toUpperCase();
+  const currency = String(req.query.currency || 'INR').trim().toUpperCase();
   if (!SUPPORTED_CURRENCIES.includes(currency)) {
-    throw new AppError(`Unsupported currency "${currency}".`, 400);
+    throw new AppError(`Unsupported currency "${req.query.currency}". Supported currencies are: ${SUPPORTED_CURRENCIES.join(', ')}.`, 400);
   }
 
   // Fetch all active question packs dynamically from DB
@@ -37,7 +37,7 @@ export const getPacksCatalog = asyncHandler(async (req, res) => {
 
   const questionPacks = activeQuestionPacks.map((pack) => {
     const prices = pack.prices || {};
-    const priceTier = prices[currency] || prices['INR'] || {};
+    const priceTier = prices[currency] || {};
     const originalPrice = Number(priceTier.originalPrice ?? priceTier.offerPrice ?? 0);
     const offerPrice = Number(priceTier.offerPrice ?? originalPrice ?? 0);
 
@@ -67,7 +67,7 @@ export const getPacksCatalog = asyncHandler(async (req, res) => {
 
   const reportPacks = activeReportPacks.map((pack) => {
     const prices = pack.prices || {};
-    const priceTier = prices[currency] || prices['INR'] || {};
+    const priceTier = prices[currency] || {};
     const originalPrice = Number(priceTier.originalPrice ?? priceTier.offerPrice ?? 0);
     const offerPrice = Number(priceTier.offerPrice ?? originalPrice ?? 0);
 
@@ -116,9 +116,14 @@ export const validateCoupon = asyncHandler(async (req, res) => {
     throw new AppError('packId and couponCode are required.', 400);
   }
 
+  const normalizedCurrency = String(currency || 'INR').trim().toUpperCase();
+  if (!SUPPORTED_CURRENCIES.includes(normalizedCurrency)) {
+    throw new AppError(`Unsupported currency "${currency}". Supported currencies are: ${SUPPORTED_CURRENCIES.join(', ')}.`, 400);
+  }
+
   const breakdown = await calculateOrderPricing({
     packId,
-    currency,
+    currency: normalizedCurrency,
     couponCode,
     billingState
   });
@@ -140,10 +145,15 @@ export const createOrder = asyncHandler(async (req, res) => {
     throw new AppError('packId is required.', 400);
   }
 
+  const normalizedCurrency = String(currency || 'INR').trim().toUpperCase();
+  if (!SUPPORTED_CURRENCIES.includes(normalizedCurrency)) {
+    throw new AppError(`Unsupported currency "${currency}". Supported currencies are: ${SUPPORTED_CURRENCIES.join(', ')}.`, 400);
+  }
+
   const orderData = await createRazorpayOrder({
     user: req.user,
     packId,
-    currency,
+    currency: normalizedCurrency,
     couponCode,
     billingState
   });

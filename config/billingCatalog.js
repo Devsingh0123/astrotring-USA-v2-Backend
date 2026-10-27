@@ -18,7 +18,12 @@ export const SELLER_GST_INFO = {
   gstRatePercent: 18,
 };
 
-export const SUPPORTED_CURRENCIES = ["INR", "USD"];
+/**
+ * System-wide supported currencies:
+ * - INR: Domestic payments, 18% inclusive GST (CGST/SGST in Delhi, IGST elsewhere).
+ * - USD: International payments, 0% Indian GST, charged in USD cents via Razorpay.
+ */
+export const SUPPORTED_CURRENCIES = Object.freeze(["INR", "USD"]);
 
 export const DEFAULT_COUPONS = [
   {

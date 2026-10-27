@@ -41,11 +41,17 @@ export const Order = sequelize.define('Order', {
     allowNull: false,
     defaultValue: 0
   },
-  // Currency & Server-Verified Pricing Breakdown
+  // Currency & Server-Verified Pricing Breakdown (Strictly 'INR' or 'USD')
   currency: {
     type: DataTypes.STRING(10),
     allowNull: false,
-    defaultValue: 'INR'
+    defaultValue: 'INR',
+    validate: {
+      isIn: {
+        args: [['INR', 'USD']],
+        msg: 'Currency must be either INR or USD'
+      }
+    }
   },
   subtotal: {
     type: DataTypes.DECIMAL(10, 2),
