@@ -18,7 +18,7 @@ export const SELLER_GST_INFO = {
   gstRatePercent: 18,
 };
 
-export const SUPPORTED_CURRENCIES = ["INR", "USD", "GBP", "EUR"];
+export const SUPPORTED_CURRENCIES = ["INR", "USD"];
 
 export const DEFAULT_COUPONS = [
   {

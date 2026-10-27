@@ -98,6 +98,7 @@ export const getPacksCatalog = asyncHandler(async (req, res) => {
     message: 'Billing catalog fetched successfully.',
     data: {
       currency,
+      supportedCurrencies: SUPPORTED_CURRENCIES,
       questionPacks,
       reportPacks,
       coupons
