@@ -1,7 +1,7 @@
 import { ChatOpenAI } from '@langchain/openai';
 import { SystemMessage, AIMessage, ToolMessage } from '@langchain/core/messages';
-import { createVaaniTools } from './tools.js';
-import { buildVaaniSystemPrompt, buildAstropediaSystemPrompt } from './prompts.js';
+import { createJyotishTools } from './tools.js';
+import { buildJyotishSystemPrompt, buildShastraSystemPrompt } from './prompts.js';
 import { AppError } from '../utils/appError.js';
 
 const MAX_TOOL_ROUNDS_PER_TURN = 2;
@@ -62,13 +62,13 @@ export const parseStructuredReading = (rawText, userName, engine) => {
     return {
       openingThought:
         parsed.openingThought ||
-        (engine === 'vaani'
+        (engine === 'jyotish'
           ? `Analyzing your natal chart placements, ${firstName}...`
           : 'Consulting classical Vedic astrology treatises...'),
       thinkingSteps:
         Array.isArray(parsed.thinkingSteps) && parsed.thinkingSteps.length > 0
           ? parsed.thinkingSteps
-          : engine === 'vaani'
+          : engine === 'jyotish'
             ? ['Inspected your divisional charts', 'Evaluated active Vimshottari Dasha']
             : ['Referenced Brihat Parashara Hora Shastra', 'Synthesized classical commentaries'],
       paragraphs:
@@ -88,11 +88,11 @@ export const parseStructuredReading = (rawText, userName, engine) => {
 
     return {
       openingThought:
-        engine === 'vaani'
+        engine === 'jyotish'
           ? `Reading your birth chart placements, ${firstName}...`
           : 'Consulting classical Vedic texts and treatises...',
       thinkingSteps:
-        engine === 'vaani'
+        engine === 'jyotish'
           ? ['Inspected your birth chart', 'Synthesized planetary strengths & dashas']
           : ['Consulted Brihat Parashara Hora Shastra', 'Cross-referenced classical sutras'],
       paragraphs: paragraphs.length > 0 ? paragraphs : [String(rawText || '')],
@@ -104,9 +104,9 @@ export const parseStructuredReading = (rawText, userName, engine) => {
 
 /**
  * Node 1: `agentNode`
- * - In `vaani` mode, binds the 5 Vedic astrology tools so the model can fetch
+ * - In `jyotish` mode, binds the 5 Vedic astrology tools so the model can fetch
  *   exact chart slices (divisional charts, dashas, yogas, strengths, transits).
- * - Once tool calls are complete (or immediately in `astropedia` mode), streams
+ * - Once tool calls are complete (or immediately in `shastra` mode), streams
  *   the final structured JSON reading and emits live SSE tokens.
  */
 export const agentNode = async (state, config) => {
@@ -122,20 +122,20 @@ export const agentNode = async (state, config) => {
   const onToken = config?.configurable?.onToken;
   const onThinking = config?.configurable?.onThinking;
 
-  const isVaaniMode = state.engine === 'vaani';
+  const isJyotishMode = state.engine === 'jyotish';
   const toolRounds = countToolRoundsInCurrentTurn(state.messages);
 
   if (toolRounds === 0 && onThinking) {
     onThinking(
-      isVaaniMode
+      isJyotishMode
         ? 'Reviewing your core birth profile and selecting chart tools...'
         : 'Searching Brihat Parashara Hora Shastra & classical commentaries...'
     );
   }
 
-  const systemPrompt = isVaaniMode
-    ? buildVaaniSystemPrompt(state.userName, state.userSummary)
-    : buildAstropediaSystemPrompt();
+  const systemPrompt = isJyotishMode
+    ? buildJyotishSystemPrompt(state.userName, state.userSummary)
+    : buildShastraSystemPrompt();
 
   const baseLlm = new ChatOpenAI({
     openAIApiKey: apiKey,
@@ -147,11 +147,11 @@ export const agentNode = async (state, config) => {
     }
   });
 
-  // Bind tools in Vaani mode as long as we haven't exceeded the max tool rounds per turn
-  const allowToolCalls = isVaaniMode && state.chartData && toolRounds < MAX_TOOL_ROUNDS_PER_TURN;
+  // Bind tools in Jyotish mode as long as we haven't exceeded the max tool rounds per turn
+  const allowToolCalls = isJyotishMode && state.chartData && toolRounds < MAX_TOOL_ROUNDS_PER_TURN;
   const activeLlm = allowToolCalls
     ? baseLlm.bindTools(
-        createVaaniTools({
+        createJyotishTools({
           chartData: state.chartData,
           birthParams: state.birthParams || {}
         })
@@ -226,7 +226,7 @@ export const toolExecutorNode = async (state, config) => {
     return { messages: [] };
   }
 
-  const tools = createVaaniTools({
+  const tools = createJyotishTools({
     chartData: state.chartData,
     birthParams: state.birthParams || {}
   });

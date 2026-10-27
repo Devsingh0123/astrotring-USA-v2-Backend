@@ -38,9 +38,9 @@ backend/
 ├── .env.example              # Environment variables template
 ├── package.json              # ES module manifest & scripts
 ├── server.js                 # HTTP server bootstrap & DB initialization
-├── ai/                       # LangGraph Tool-Calling Engine for Vaani & Astropedia
+├── ai/                       # LangGraph Tool-Calling Engine for Jyotish & Shastra
 │   ├── tools.js              # 5 Vedic astrology tools with plain JSON Schema
-│   ├── state.js              # VaaniStateAnnotation (messages, chartData, birthParams)
+│   ├── state.js              # JyotishStateAnnotation (messages, chartData, birthParams)
 │   ├── prompts.js            # System prompts & lightweight user profile generator
 │   ├── nodes.js              # agentNode, toolExecutorNode, routeAfterAgent
 │   └── graph.js              # Compiled StateGraph with MemorySaver checkpointer
@@ -63,7 +63,7 @@ backend/
 │   ├── authController.js     # Auth endpoint handlers (send-otp, verify-otp, me)
 │   ├── onboardingController.js # Onboarding submission and status check
 │   ├── vedicController.js    # Unified Vedic astrology & calculators controller
-│   └── chatController.js     # Vaani & Astropedia SSE chat controller
+│   └── chatController.js     # Jyotish & Shastra SSE chat controller
 ├── services/
 │   ├── vedicAstrologyService.js # Client for Jagannatha Hora calculations & Redis cache
 │   └── chatService.js        # Service delegating conversational turns to ai/graph.js

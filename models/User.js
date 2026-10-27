@@ -40,7 +40,7 @@ export const User = sequelize.define('User', {
     allowNull: false,
     defaultValue: false
   },
-  // Number of Vaani consultation credits available (every new user starts with 1 free question)
+  // Number of Jyotish consultation credits available (every new user starts with 1 free question)
   credit_balance: {
     type: DataTypes.INTEGER,
     allowNull: false,

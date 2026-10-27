@@ -9,8 +9,8 @@ import { AppError } from "../utils/appError.js";
 import { asyncHandler } from "../utils/asyncHandler.js";
 
 /**
- * Default promotional offer shown inside Vaani chat when a user's question quota reaches 0.
- * Matches the exact shape rendered by `frontend/src/features/vaani/components/VaaniChatConversation.jsx`.
+ * Default promotional offer shown inside Jyotish chat when a user's question quota reaches 0.
+ * Matches the exact shape rendered by the chat frontend components.
  */
 const ZERO_CREDIT_OFFER = {
   title: "Get 12 questions at 67% discount",
@@ -56,20 +56,20 @@ const shouldUseSse = (req) => {
 };
 
 /**
- * 1. POST /api/v1/chat/vaani
+ * 1. POST /api/v1/chat/jyotish
  * Personalized Vedic consultation grounded in the user's pre-calculated birth chart.
  * - Requires authentication (`protect` middleware)
  * - Requires `credit_balance >= 1` (costs 1 credit per question)
  * - Streams response via SSE (`thinking` -> `token` -> `metadata` -> `done`)
  */
-export const consultVaani = asyncHandler(async (req, res, next) => {
+export const consultJyotish = asyncHandler(async (req, res, next) => {
   const user = req.user;
   const rawQuery = req.body.query || req.body.question;
   const { threadId, chartId } = req.body;
 
   if (!rawQuery || typeof rawQuery !== "string" || !rawQuery.trim()) {
     return next(
-      new AppError("Please provide a question (`query`) for Vaani.", 400),
+      new AppError("Please provide a question (`query`) for Jyotish.", 400),
     );
   }
   const question = rawQuery.trim();
@@ -79,7 +79,7 @@ export const consultVaani = asyncHandler(async (req, res, next) => {
     return res.status(402).json({
       success: false,
       message:
-        "Your question balance is empty. Please purchase a question pack to consult Vaani.",
+        "Your question balance is empty. Please purchase a question pack to consult Jyotish.",
       data: {
         creditsRemaining: 0,
         offer: ZERO_CREDIT_OFFER,
@@ -111,19 +111,19 @@ export const consultVaani = asyncHandler(async (req, res, next) => {
   if (!birthDetail && !birthChart) {
     return next(
       new AppError(
-        "Birth details not found. Please complete onboarding so Vaani can read your birth chart.",
+        "Birth details not found. Please complete onboarding so Jyotish can read your birth chart.",
         400,
       ),
     );
   }
 
-  // 3. Find existing Vaani thread or create a new one
+  // 3. Find existing Jyotish thread or create a new one
   let thread = null;
   let priorMessages = [];
 
   if (threadId) {
     thread = await ChatThread.findOne({
-      where: { id: threadId, user_id: user.id, engine: "vaani" },
+      where: { id: threadId, user_id: user.id, engine: "jyotish" },
     });
     if (thread) {
       priorMessages = await ChatMessage.findAll({
@@ -137,7 +137,7 @@ export const consultVaani = asyncHandler(async (req, res, next) => {
     thread = await ChatThread.create({
       user_id: user.id,
       chart_id: birthChart?.id || birthDetail?.chart_id || null,
-      engine: "vaani",
+      engine: "jyotish",
       title: question.length > 120 ? `${question.slice(0, 117)}...` : question,
     });
   }
@@ -160,7 +160,7 @@ export const consultVaani = asyncHandler(async (req, res, next) => {
   try {
     // 5. Prepare the user's birth chart context for on-demand tool execution
     const { chartData, birthParams, userSummary } =
-      await chatService.prepareVaaniChartContext({
+      await chatService.prepareJyotishChartContext({
         birthDetail,
         chartRecord: birthChart,
       });
@@ -173,7 +173,7 @@ export const consultVaani = asyncHandler(async (req, res, next) => {
     // 6. Execute stateful LangGraph turn with live token callbacks
     const { reading, tokensUsed } = await chatService.runChatTurn({
       threadId: thread.id,
-      engine: "vaani",
+      engine: "jyotish",
       question,
       userName,
       userSummary,
@@ -216,11 +216,11 @@ export const consultVaani = asyncHandler(async (req, res, next) => {
     thread.changed("updated_at", true);
     await thread.save();
 
-    // Format reading item to match `frontend/src/features/vaani/components/VaaniChatConversation.jsx`
+    // Format reading item for frontend consumption
     const readingResponse = {
       id: assistantMsg.id,
       threadId: thread.id,
-      engine: "vaani",
+      engine: "jyotish",
       question,
       createdAt: assistantMsg.created_at,
       ...structuredPayload,
@@ -244,7 +244,7 @@ export const consultVaani = asyncHandler(async (req, res, next) => {
 
     return res.status(200).json({
       success: true,
-      message: "Vaani consultation completed.",
+      message: "Jyotish consultation completed.",
       data: {
         threadId: thread.id,
         messageId: assistantMsg.id,
@@ -255,7 +255,7 @@ export const consultVaani = asyncHandler(async (req, res, next) => {
   } catch (error) {
     if (isSse) {
       sendSseEvent(res, "error", {
-        message: error.message || "Failed to generate Vaani reading.",
+        message: error.message || "Failed to generate Jyotish reading.",
       });
       return res.end();
     }
@@ -264,30 +264,30 @@ export const consultVaani = asyncHandler(async (req, res, next) => {
 });
 
 /**
- * 2. POST /api/v1/chat/astropedia
+ * 2. POST /api/v1/chat/shastra
  * Universal Vedic Astrology Encyclopedia Q&A.
  * - Free & unlimited (0 credits)
  * - No birth chart needed
  * - Works for both guests and logged-in users (`optionalAuth`)
  */
-export const consultAstropedia = asyncHandler(async (req, res, next) => {
+export const consultShastra = asyncHandler(async (req, res, next) => {
   const user = req.user; // null if guest, User instance if logged in
   const rawQuery = req.body.query || req.body.question;
   const { threadId } = req.body;
 
   if (!rawQuery || typeof rawQuery !== "string" || !rawQuery.trim()) {
     return next(
-      new AppError("Please provide a question (`query`) for Astropedia.", 400),
+      new AppError("Please provide a question (`query`) for Shastra.", 400),
     );
   }
   const question = rawQuery.trim();
 
-  // 1. Find existing Astropedia thread or create a new one
+  // 1. Find existing Shastra thread or create a new one
   let thread = null;
   let priorMessages = [];
 
   if (threadId) {
-    const whereClause = { id: threadId, engine: "astropedia" };
+    const whereClause = { id: threadId, engine: "shastra" };
     if (user) whereClause.user_id = user.id;
 
     thread = await ChatThread.findOne({ where: whereClause });
@@ -303,7 +303,7 @@ export const consultAstropedia = asyncHandler(async (req, res, next) => {
     thread = await ChatThread.create({
       user_id: user ? user.id : null,
       chart_id: null,
-      engine: "astropedia",
+      engine: "shastra",
       title: question.length > 120 ? `${question.slice(0, 117)}...` : question,
     });
   }
@@ -326,10 +326,10 @@ export const consultAstropedia = asyncHandler(async (req, res, next) => {
   }
 
   try {
-    // 3. Execute stateful LangGraph turn in Astropedia mode
+    // 3. Execute stateful LangGraph turn in Shastra mode
     const { reading, tokensUsed } = await chatService.runChatTurn({
       threadId: thread.id,
-      engine: "astropedia",
+      engine: "shastra",
       question,
       userName: "Seeker",
       chartFactSheet: "",
@@ -367,7 +367,7 @@ export const consultAstropedia = asyncHandler(async (req, res, next) => {
     const readingResponse = {
       id: assistantMsg.id,
       threadId: thread.id,
-      engine: "astropedia",
+      engine: "shastra",
       question,
       createdAt: assistantMsg.created_at,
       ...structuredPayload,
@@ -391,7 +391,7 @@ export const consultAstropedia = asyncHandler(async (req, res, next) => {
 
     return res.status(200).json({
       success: true,
-      message: "Astropedia consultation completed.",
+      message: "Shastra consultation completed.",
       data: {
         threadId: thread.id,
         messageId: assistantMsg.id,
@@ -402,7 +402,7 @@ export const consultAstropedia = asyncHandler(async (req, res, next) => {
   } catch (error) {
     if (isSse) {
       sendSseEvent(res, "error", {
-        message: error.message || "Failed to generate Astropedia answer.",
+        message: error.message || "Failed to generate Shastra answer.",
       });
       return res.end();
     }
@@ -413,13 +413,13 @@ export const consultAstropedia = asyncHandler(async (req, res, next) => {
 /**
  * 3. GET /api/v1/chat/threads
  * Lists all saved conversation threads for the logged-in user.
- * Optional query param: `?engine=vaani` or `?engine=astropedia`
+ * Optional query param: `?engine=jyotish` or `?engine=shastra`
  */
 export const getUserThreads = asyncHandler(async (req, res) => {
   const { engine } = req.query;
   const whereClause = { user_id: req.user.id };
 
-  if (engine && ["vaani", "astropedia"].includes(engine.toLowerCase())) {
+  if (engine && ["jyotish", "shastra"].includes(engine.toLowerCase())) {
     whereClause.engine = engine.toLowerCase();
   }
 

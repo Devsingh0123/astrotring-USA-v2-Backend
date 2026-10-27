@@ -1,5 +1,5 @@
 import { HumanMessage, AIMessage } from "@langchain/core/messages";
-import { vaaniGraph, vaaniCheckpointer } from "../ai/graph.js";
+import { jyotishGraph, jyotishCheckpointer } from "../ai/graph.js";
 import { buildUserChartSummary } from "../ai/prompts.js";
 import { vedicAstrologyService } from "./vedicAstrologyService.js";
 
@@ -10,9 +10,9 @@ export const chatService = {
   /**
    * Prepares the user's birth chart, birth parameters, and a lightweight 5-line summary.
    * Full charts, dashas, yogas, strengths, and transits are fetched on-demand
-   * by Vaani via tool calls rather than dumped into the prompt.
+   * by Jyotish via tool calls rather than dumped into the prompt.
    */
-  async prepareVaaniChartContext({ birthDetail, chartRecord }) {
+  async prepareJyotishChartContext({ birthDetail, chartRecord }) {
     let activeChart = chartRecord;
 
     const birthParams = {
@@ -65,9 +65,9 @@ export const chatService = {
    *
    * @param {Object} params
    * @param {string} params.threadId - UUID of the ChatThread
-   * @param {string} params.engine - 'vaani' | 'astropedia'
+   * @param {string} params.engine - 'jyotish' | 'shastra'
    * @param {string} params.question - User's question text
-   * @param {string} params.userName - User's full name (for Vaani personalization)
+   * @param {string} params.userName - User's full name (for Jyotish personalization)
    * @param {string} [params.userSummary] - Lightweight 5-line core profile
    * @param {Object} [params.chartData] - User's raw horoscope data for tool inspection
    * @param {Object} [params.birthParams] - User's birth coordinates for live transit tools
@@ -77,7 +77,7 @@ export const chatService = {
    */
   async runChatTurn({
     threadId,
-    engine = "vaani",
+    engine = "jyotish",
     question,
     userName = "Seeker",
     userSummary = "",
@@ -108,7 +108,7 @@ export const chatService = {
 
     historyToInject.push(new HumanMessage(question));
 
-    const graphResult = await vaaniGraph.invoke(
+    const graphResult = await jyotishGraph.invoke(
       {
         messages: historyToInject,
         engine,

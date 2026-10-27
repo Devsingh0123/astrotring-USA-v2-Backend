@@ -558,10 +558,10 @@ export const createTransitsAndMuhurtaTool = ({ chartData, birthParams }) => {
 };
 
 /**
- * Master factory that binds all 5 Vaani Vedic astrology tools to a specific user's
+ * Master factory that binds all 5 Jyotish Vedic astrology tools to a specific user's
  * birth chart and birth coordinates.
  */
-export const createVaaniTools = ({ chartData, birthParams }) => [
+export const createJyotishTools = ({ chartData, birthParams }) => [
   createDivisionalChartTool(chartData),
   createDashaTool(chartData),
   createYogasAndDoshasTool(chartData),

@@ -45,7 +45,7 @@ export const protect = asyncHandler(async (req, res, next) => {
 /**
  * Optional authentication middleware:
  * Attaches `req.user` if a valid Bearer JWT is provided, or sets `req.user = null`
- * for unauthenticated guests without throwing an error (used by Astropedia).
+ * for unauthenticated guests without throwing an error (used by Shastra).
  */
 export const optionalAuth = asyncHandler(async (req, res, next) => {
   req.user = null;

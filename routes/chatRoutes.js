@@ -1,7 +1,7 @@
 import { Router } from "express";
 import {
-  consultVaani,
-  consultAstropedia,
+  consultJyotish,
+  consultShastra,
   getUserThreads,
   getThreadById,
   updateMessageFeedback,
@@ -15,11 +15,11 @@ const router = Router();
  * Conversational AI Engine Routes (`/api/v1/chat`)
  */
 
-// 1. Vaani Engine — Personal chart-bound consultation (Protected, costs 1 credit, SSE stream)
-router.post("/vaani", protect, consultVaani);
+// 1. Jyotish Engine — Personal chart-bound consultation (Protected, costs 1 credit, SSE stream)
+router.post("/jyotish", protect, consultJyotish);
 
-// 2. Astropedia Engine — Universal Vedic Encyclopedia (Free, optional auth for history, SSE stream)
-router.post("/astropedia", optionalAuth, consultAstropedia);
+// 2. Shastra Engine — Universal Vedic Encyclopedia (Free, optional auth for history, SSE stream)
+router.post("/shastra", optionalAuth, consultShastra);
 
 // 3. List all saved conversation threads for logged-in user
 router.get("/threads", protect, getUserThreads);

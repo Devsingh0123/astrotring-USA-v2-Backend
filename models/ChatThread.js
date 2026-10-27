@@ -5,8 +5,8 @@ import { sequelize } from '../config/db.js';
  * ChatThread Model (`chat_threads` table)
  *
  * Represents a stateful multi-turn conversation thread for either:
- * - 'vaani': Personalized consultation grounded in a specific user birth chart
- * - 'astropedia': Universal Vedic astrology encyclopedia Q&A (no chart needed)
+ * - 'jyotish': Personalized consultation grounded in a specific user birth chart
+ * - 'shastra': Universal Vedic astrology encyclopedia Q&A (no chart needed)
  *
  * The `id` (UUID) also serves as the `thread_id` passed to LangGraph's MemorySaver checkpointer.
  */
@@ -17,8 +17,8 @@ export const ChatThread = sequelize.define('ChatThread', {
     primaryKey: true,
     allowNull: false
   },
-  // Nullable so unauthenticated guests can still use Astropedia if needed;
-  // required for Vaani threads and saved user history
+  // Nullable so unauthenticated guests can still use Shastra if needed;
+  // required for Jyotish threads and saved user history
   user_id: {
     type: DataTypes.UUID,
     allowNull: true,
@@ -27,7 +27,7 @@ export const ChatThread = sequelize.define('ChatThread', {
       key: 'id'
     }
   },
-  // Reference to the birth_charts row used to ground Vaani's astrological context
+  // Reference to the birth_charts row used to ground Jyotish's astrological context
   chart_id: {
     type: DataTypes.UUID,
     allowNull: true,
@@ -38,9 +38,9 @@ export const ChatThread = sequelize.define('ChatThread', {
   },
   // Which AI mode this thread belongs to
   engine: {
-    type: DataTypes.ENUM('vaani', 'astropedia'),
+    type: DataTypes.ENUM('jyotish', 'shastra'),
     allowNull: false,
-    defaultValue: 'vaani'
+    defaultValue: 'jyotish'
   },
   // Human-readable title shown in the chat history sidebar (auto-derived from first question)
   title: {

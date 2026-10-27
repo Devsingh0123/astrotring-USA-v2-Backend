@@ -51,7 +51,7 @@ export const ChatMessage = sequelize.define('ChatMessage', {
     allowNull: false,
     defaultValue: 0
   },
-  // Number of credits deducted for this turn (1 for Vaani assistant reply, 0 for Astropedia)
+  // Number of credits deducted for this turn (1 for Jyotish assistant reply, 0 for Shastra)
   credits_debited: {
     type: DataTypes.INTEGER,
     allowNull: false,
