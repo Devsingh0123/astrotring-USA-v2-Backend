@@ -1,7 +1,6 @@
 import { Op } from 'sequelize';
 import { Invoice, Order, QuestionPack, ReportPack, Coupon } from '../models/index.js';
 import {
-  DEFAULT_COUPONS,
   SELLER_GST_INFO,
   SUPPORTED_CURRENCIES
 } from '../config/billingCatalog.js';
@@ -88,10 +87,10 @@ export const getPacksCatalog = asyncHandler(async (req, res) => {
     };
   });
 
-  let coupons = await Coupon.findAll({ where: { is_active: true } });
-  if (!coupons || coupons.length === 0) {
-    coupons = DEFAULT_COUPONS;
-  }
+  const coupons = await Coupon.findAll({
+    where: { is_active: true },
+    order: [['created_at', 'ASC']]
+  });
 
   res.status(200).json({
     success: true,

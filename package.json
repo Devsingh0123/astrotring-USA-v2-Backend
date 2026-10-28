@@ -6,7 +6,9 @@
   "main": "server.js",
   "scripts": {
     "dev": "nodemon server.js",
-    "start": "node server.js"
+    "start": "node server.js",
+    "question-pack": "node scripts/seedQuestionPacks.js",
+    "coupons": "node scripts/seedCoupons.js"
   },
   "dependencies": {
     "@langchain/core": "^1.2.18",

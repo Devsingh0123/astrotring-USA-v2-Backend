@@ -15,7 +15,6 @@ import {
   ReportPack
 } from '../models/index.js';
 import {
-  DEFAULT_COUPONS,
   SELLER_GST_INFO,
   SUPPORTED_CURRENCIES
 } from '../config/billingCatalog.js';
