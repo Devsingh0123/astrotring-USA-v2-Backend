@@ -120,19 +120,6 @@ export const REPORT_CATALOG = [
 
   // 3. Money & Wealth
   {
-    slug: 'artha-sutram',
-    category: 'money',
-    categoryName: 'Money & Wealth',
-    title: 'Artha Sutram — Master Wealth Blueprint',
-    subtitle: 'The flagship 23-section Vedic wealth master blueprint',
-    badge: 'Flagship',
-    description:
-      'The comprehensive master reading analyzing the 2nd house of treasury, 11th house of profits, Indu Lagna, and Hora (D-2) chart to map lifetime wealth accumulation and investment cycles.',
-    dashaFocus: 'Indu Lagna, Hora & Dhana Yogas',
-    creditsRequired: 1,
-    estimatedPages: 10
-  },
-  {
     slug: 'wealth',
     category: 'money',
     categoryName: 'Money & Wealth',

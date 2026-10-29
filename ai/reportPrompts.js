@@ -293,7 +293,7 @@ export const REPORT_BLUEPRINTS = {
         },
         {
           chapterNumber: 9,
-          title: "Executive Artha Sutram Financial Roadmap",
+          title: "Executive Vedic Wealth Financial Roadmap",
           focus: "Actionable 5-year quarter-by-quarter financial roadmap and affirmative Vedic wealth blueprint."
         }
       ]
@@ -370,7 +370,7 @@ export const resolveBlueprintKey = (slug = '') => {
   if (['marriage', 'love-style', 'ideal-partner', 'love-arrange', 'spouse', 'in-laws'].includes(s)) {
     return 'marriage';
   }
-  if (['wealth', 'artha-sutram', 'billionaire'].includes(s)) {
+  if (['wealth', 'billionaire'].includes(s)) {
     return 'wealth';
   }
   return 'personality';
