@@ -16,10 +16,6 @@ export const User = sequelize.define('User', {
       isEmail: true
     }
   },
-  password: {
-    type: DataTypes.STRING(255),
-    allowNull: true
-  },
   is_email_verified: {
     type: DataTypes.BOOLEAN,
     allowNull: false,
