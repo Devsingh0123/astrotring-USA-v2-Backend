@@ -17,7 +17,7 @@ export const Blog = sequelize.define('Blog', {
     type: DataTypes.UUID,
     allowNull: false,
     references: {
-      model: 'users',
+      model: 'admins',
       key: 'id'
     }
   },

@@ -1,6 +1,6 @@
 import { Op, fn, col } from 'sequelize';
 import { sequelize } from '../config/db.js';
-import { Blog, User } from '../models/index.js';
+import { Blog, Admin } from '../models/index.js';
 import { AppError } from '../utils/appError.js';
 
 // Standard category metadata for friendly display names & icons on frontend
@@ -86,9 +86,9 @@ export const getPublicBlogs = async ({
     ],
     include: [
       {
-        model: User,
+        model: Admin,
         as: 'author',
-        attributes: ['id', 'email', 'role']
+        attributes: ['id', 'name', 'email', 'avatar_url', 'role']
       }
     ],
     order: [[sortColumn, sortOrder]],
@@ -138,9 +138,9 @@ export const getPublicBlogBySlug = async (slugOrId) => {
     where: whereClause,
     include: [
       {
-        model: User,
+        model: Admin,
         as: 'author',
-        attributes: ['id', 'email', 'role']
+        attributes: ['id', 'name', 'email', 'avatar_url', 'role']
       }
     ]
   });
@@ -277,9 +277,9 @@ export const getFeaturedBlogs = async (limit = 4) => {
     ],
     include: [
       {
-        model: User,
+        model: Admin,
         as: 'author',
-        attributes: ['id', 'email', 'role']
+        attributes: ['id', 'name', 'email', 'avatar_url', 'role']
       }
     ],
     order: [

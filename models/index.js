@@ -13,6 +13,7 @@ import { QuestionPack } from './QuestionPack.js';
 import { ReportPack } from './ReportPack.js';
 import { UserReport } from './UserReport.js';
 import { Blog } from './Blog.js';
+import { Admin } from './Admin.js';
 
 // User <-> Otp
 User.hasMany(Otp, { foreignKey: 'user_id', as: 'otps' });
@@ -66,12 +67,13 @@ UserReport.belongsTo(User, { foreignKey: 'user_id', as: 'user' });
 BirthChart.hasMany(UserReport, { foreignKey: 'chart_id', as: 'reports' });
 UserReport.belongsTo(BirthChart, { foreignKey: 'chart_id', as: 'chart' });
 
-// User <-> Blog
-User.hasMany(Blog, { foreignKey: 'author_id', as: 'blogs' });
-Blog.belongsTo(User, { foreignKey: 'author_id', as: 'author' });
+// Admin <-> Blog
+Admin.hasMany(Blog, { foreignKey: 'author_id', as: 'blogs' });
+Blog.belongsTo(Admin, { foreignKey: 'author_id', as: 'author' });
 
 export {
   User,
+  Admin,
   Otp,
   RefreshToken,
   BirthChart,
