@@ -11,6 +11,7 @@ import { asyncHandler } from '../utils/asyncHandler.js';
  *
  * Saves primary birth details, automatically computes initial natal chart (raw response.horoscope),
  * and updates user.onboarding_completed = true.
+ * Performs in-place updates on existing charts and skips recalculation if astronomical inputs haven't changed.
  */
 export const submitOnboarding = asyncHandler(async (req, res, next) => {
   const user = req.user;
@@ -58,60 +59,110 @@ export const submitOnboarding = asyncHandler(async (req, res, next) => {
     return next(new AppError('Birth location coordinates and timezone are required.', 400));
   }
 
-  // 1. Calculate Natal Horoscope using Vedic Engine (returns raw response.horoscope)
-  const horoscopeData = await vedicAstrologyService.getHoroscope({
-    date: birthDate,
-    time: birthTime,
-    place: birthCity,
-    latitude: lat,
-    longitude: lon,
-    timezone: tz,
-    gender: normalizedGender === 'female' ? 'female' : 'male'
-  });
-
-  const rasi = horoscopeData?.divisional_charts?.['D-1_rasi'] || {};
-  const moonNakshatra = horoscopeData?.nakshatra_pada?.Moon || {};
-
-  // 2. Persist BirthChart record with exact raw horoscopeData in chart_data
-  const birthChart = await BirthChart.create({
-    user_id: user.id,
-    person_name: fullName,
-    gender: normalizedGender,
-    date_of_birth: birthDate,
-    time_of_birth: birthTime,
-    is_time_unknown: isTimeUnknown,
-    birth_city: birthCity || 'Unknown City',
-    latitude: lat,
-    longitude: lon,
-    timezone: tz,
-    ascendant_sign: rasi.Ascendant?.sign || null,
-    moon_sign: rasi.Moon?.sign || null,
-    sun_sign: rasi.Sun?.sign || null,
-    nakshatra: moonNakshatra.nakshatra || null,
-    nakshatra_pada: moonNakshatra.pada || null,
-    chart_data: horoscopeData
-  });
-
-  // 3. Persist or Update primary BirthDetail record in `birth_details` table
+  // 1. Check for existing primary BirthDetail and associated BirthChart
   let birthDetail = await BirthDetail.findOne({
     where: {
       user_id: user.id,
       is_primary: true
-    }
+    },
+    include: [{ model: BirthChart, as: 'chart' }]
   });
 
+  let birthChart = birthDetail?.chart || null;
+  if (!birthChart && birthDetail?.chart_id) {
+    birthChart = await BirthChart.findByPk(birthDetail.chart_id);
+  }
+
+  // 2. Change detection: determine if astronomical input parameters changed
+  const hasExistingChart = Boolean(birthChart && birthDetail);
+  const isBirthParamsChanged = !hasExistingChart ||
+    birthDetail.date_of_birth !== birthDate ||
+    birthDetail.time_of_birth !== birthTime ||
+    Number(birthDetail.latitude) !== Number(lat) ||
+    Number(birthDetail.longitude) !== Number(lon) ||
+    Number(birthDetail.timezone) !== Number(tz) ||
+    birthDetail.gender !== normalizedGender ||
+    Boolean(birthDetail.is_time_unknown) !== Boolean(isTimeUnknown);
+
+  let horoscopeData;
+  let rasi;
+  let moonNakshatra;
+
+  // 3. Only call external Vedic calculation engine if birth parameters changed or first time
+  if (isBirthParamsChanged) {
+    horoscopeData = await vedicAstrologyService.getHoroscope({
+      date: birthDate,
+      time: birthTime,
+      place: birthCity,
+      latitude: lat,
+      longitude: lon,
+      timezone: tz,
+      gender: normalizedGender === 'female' ? 'female' : 'male'
+    });
+
+    rasi = horoscopeData?.divisional_charts?.['D-1_rasi'] || {};
+    moonNakshatra = horoscopeData?.nakshatra_pada?.Moon || {};
+  }
+
+  // 4. Update existing BirthChart in-place OR create first chart
+  if (birthChart) {
+    const chartUpdates = {
+      person_name: fullName,
+      birth_city: birthCity || 'Unknown City'
+    };
+
+    if (isBirthParamsChanged) {
+      chartUpdates.gender = normalizedGender;
+      chartUpdates.date_of_birth = birthDate;
+      chartUpdates.time_of_birth = birthTime;
+      chartUpdates.is_time_unknown = isTimeUnknown;
+      chartUpdates.latitude = lat;
+      chartUpdates.longitude = lon;
+      chartUpdates.timezone = tz;
+      chartUpdates.ascendant_sign = rasi.Ascendant?.sign || null;
+      chartUpdates.moon_sign = rasi.Moon?.sign || null;
+      chartUpdates.sun_sign = rasi.Sun?.sign || null;
+      chartUpdates.nakshatra = moonNakshatra.nakshatra || null;
+      chartUpdates.nakshatra_pada = moonNakshatra.pada || null;
+      chartUpdates.chart_data = horoscopeData;
+    }
+
+    await birthChart.update(chartUpdates);
+  } else {
+    birthChart = await BirthChart.create({
+      user_id: user.id,
+      person_name: fullName,
+      gender: normalizedGender,
+      date_of_birth: birthDate,
+      time_of_birth: birthTime,
+      is_time_unknown: isTimeUnknown,
+      birth_city: birthCity || 'Unknown City',
+      latitude: lat,
+      longitude: lon,
+      timezone: tz,
+      ascendant_sign: rasi.Ascendant?.sign || null,
+      moon_sign: rasi.Moon?.sign || null,
+      sun_sign: rasi.Sun?.sign || null,
+      nakshatra: moonNakshatra.nakshatra || null,
+      nakshatra_pada: moonNakshatra.pada || null,
+      chart_data: horoscopeData
+    });
+  }
+
+  // 5. Update existing primary BirthDetail OR create first detail
   if (birthDetail) {
-    birthDetail.full_name = fullName;
-    birthDetail.gender = normalizedGender;
-    birthDetail.date_of_birth = birthDate;
-    birthDetail.time_of_birth = birthTime;
-    birthDetail.is_time_unknown = isTimeUnknown;
-    birthDetail.birth_city = birthCity || 'Unknown City';
-    birthDetail.latitude = lat;
-    birthDetail.longitude = lon;
-    birthDetail.timezone = tz;
-    birthDetail.chart_id = birthChart.id;
-    await birthDetail.save();
+    await birthDetail.update({
+      full_name: fullName,
+      gender: normalizedGender,
+      date_of_birth: birthDate,
+      time_of_birth: birthTime,
+      is_time_unknown: isTimeUnknown,
+      birth_city: birthCity || 'Unknown City',
+      latitude: lat,
+      longitude: lon,
+      timezone: tz,
+      chart_id: birthChart.id
+    });
   } else {
     birthDetail = await BirthDetail.create({
       user_id: user.id,
@@ -130,7 +181,7 @@ export const submitOnboarding = asyncHandler(async (req, res, next) => {
     });
   }
 
-  // 4. Update user onboarding_completed state
+  // 6. Update user onboarding_completed state
   user.onboarding_completed = true;
   await user.save();
 
