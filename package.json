@@ -1,7 +1,7 @@
 {
-  "name": "astrotring-backend",
+  "name": "japaika-backend",
   "version": "1.0.0",
-  "description": "AstroTring Backend API - Phase 1 Auth",
+  "description": "Japaika User Backend API",
   "type": "module",
   "main": "server.js",
   "scripts": {

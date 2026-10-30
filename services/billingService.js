@@ -81,7 +81,7 @@ export const calculateOrderPricing = async ({
 }) => {
   const normalizedCurrency = String(currency || 'INR').trim().toUpperCase();
   if (!SUPPORTED_CURRENCIES.includes(normalizedCurrency)) {
-    throw new AppError(`Unsupported currency: "${currency}". AstroTring strictly supports only: ${SUPPORTED_CURRENCIES.join(', ')}.`, 400);
+    throw new AppError(`Unsupported currency: "${currency}". Japaika strictly supports only: ${SUPPORTED_CURRENCIES.join(', ')}.`, 400);
   }
 
   // 1. Look up in QuestionPack model first (by UUID or code e.g. pack_gold_12)

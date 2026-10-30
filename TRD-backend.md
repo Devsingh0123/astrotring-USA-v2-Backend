@@ -1,14 +1,17 @@
-# Technical Requirements Document (TRD) — AstroTring Backend
+# Technical Requirements Document (TRD) — Japaika Backend
 
 > **Status:** Active (Phase 1 — Auth & Session Management)  
 > **Last Updated:** October 2026  
 > **Target Scope:** `backend/` and `shared/`  
+> **Production API URL:** `https://backend.japaika.com`  
+> **User Frontend URL:** `https://japaika.com`  
+> **Database:** `japaika_db` (MySQL)  
 
 ---
 
 ## 1. Overview & System Objectives
 
-The AstroTring backend provides high-performance, secure REST and real-time APIs for the AstroTring platform. Built on **Node.js (v22+)**, **Express**, and **MySQL** managed with **Sequelize ORM**, the system adheres to strict ES Module standards, stateless JWT sessions with revocable refresh tokens, and robust security protections.
+The Japaika backend provides high-performance, secure REST and real-time APIs for the Japaika platform (`https://japaika.com`). Built on **Node.js (v22+)**, **Express**, and **MySQL** (`japaika_db`) managed with **Sequelize ORM**, the system adheres to strict ES Module standards, stateless JWT sessions with revocable refresh tokens, and robust security protections.
 
 Phase 1 focuses exclusively on **Passwordless Email OTP Authentication** and session management.
 

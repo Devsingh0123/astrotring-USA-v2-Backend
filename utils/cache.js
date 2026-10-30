@@ -34,7 +34,7 @@ export const vedicCache = {
     const serialized = sortedKeys
       .map((k) => `${k}=${JSON.stringify(params[k])}`)
       .join('&');
-    return `astrotring:${prefix}:${serialized}`;
+    return `japaika:${prefix}:${serialized}`;
   },
 
   /**

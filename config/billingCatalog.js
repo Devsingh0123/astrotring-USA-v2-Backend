@@ -5,7 +5,7 @@
 
 export const SELLER_GST_INFO = {
   companyName: "VELTEX SERVICES PRIVATE LIMITED",
-  brandName: "Astrotring",
+  brandName: "Japaika",
   gstin: "07AAGCK6574Q1ZO",
   cin: "U72900DL2017PTC319827",
   pan: "AAGCK6574Q",

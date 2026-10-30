@@ -167,7 +167,7 @@ export const REPORT_BLUEPRINTS = {
         },
         {
           chapterNumber: 10,
-          title: "Executive Summary & AstroTring Career Action Plan",
+          title: "Executive Summary & Japaika Career Action Plan",
           focus: "Quarter-by-quarter strategic career roadmap and affirmative closing guidance."
         }
       ]
@@ -230,7 +230,7 @@ export const REPORT_BLUEPRINTS = {
         },
         {
           chapterNumber: 9,
-          title: "Executive Relationship Summary & AstroTring Action Plan",
+          title: "Executive Relationship Summary & Japaika Action Plan",
           focus: "Comprehensive roadmap for entering and sustaining a blessed, enduring Vedic partnership."
         }
       ]
@@ -411,7 +411,7 @@ Required Structure:
 `).join('\n---\n');
 
   const systemMessage = new SystemMessage(
-    `You are the Chief Vedic Astrologer at AstroTring, an elite scholar steeped in Sage Parashara's Brihat Parashara Hora Shastra and Sage Jaimini's Upadesha Sutras.
+    `You are the Chief Vedic Astrologer at Japaika, an elite scholar steeped in Sage Parashara's Brihat Parashara Hora Shastra and Sage Jaimini's Upadesha Sutras.
 Your mission is to author deep, authoritative, chart-personalized chapters for an official 10-page master astrological report.
 
 CRITICAL RULES:

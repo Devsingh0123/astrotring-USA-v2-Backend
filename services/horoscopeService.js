@@ -116,7 +116,7 @@ export const buildRashiTransitSnapshot = async (rashiKey, timeframe, periodWindo
   const rashiMeta = RASHI_METADATA[rashiKey];
 
   // 1. Fetch sidereal sky snapshot for targetDate (cached across all 12 signs in Redis)
-  const skyCacheKey = `astrotring:sky_gochara:${periodWindow.targetDate}`;
+  const skyCacheKey = `japaika:sky_gochara:${periodWindow.targetDate}`;
   let rawGochara = await vedicCache.get(skyCacheKey);
   if (!rawGochara) {
     const res = await vedicAstrologyService.getGochara(SKY_REF_PARAMS, periodWindow.targetDate);
@@ -263,7 +263,7 @@ const generateForecastWithAI = async (transitSnapshot) => {
 
   const { rashi, timeframe, periodKey, planets, ingresses, panchanga, muhurta, saturnPhase } = transitSnapshot;
 
-  const systemPrompt = `You are AstroTring's Master Vedic Astrologer generating a ${timeframe.toUpperCase()} horoscope for ${rashi.name} (${rashi.sanskrit} Rashi, ruled by ${rashi.ruler}).
+  const systemPrompt = `You are Japaika's Master Vedic Astrologer generating a ${timeframe.toUpperCase()} horoscope for ${rashi.name} (${rashi.sanskrit} Rashi, ruled by ${rashi.ruler}).
 STRICT RULES:
 1. NEVER invent, guess, or recalculate planetary signs, houses, or dates. Use ONLY the verified Vedic Gochara data provided below.
 2. Reference actual planetary placements and whole-sign houses from ${rashi.name} Moon (e.g. "With Jupiter transiting your Xth house..." or "As the Sun enters your Yth house on [date]...").
@@ -338,7 +338,7 @@ export const getOrGenerateHoroscope = async ({
   }
 
   const periodWindow = resolvePeriodWindow(normalizedTimeframe, date);
-  const redisCacheKey = `astrotring:horoscope_forecast:${rashiKey}:${normalizedTimeframe}:${periodWindow.periodKey}`;
+  const redisCacheKey = `japaika:horoscope_forecast:${rashiKey}:${normalizedTimeframe}:${periodWindow.periodKey}`;
 
   // 1. Check Layer 1 Cache (Redis)
   const redisCached = await vedicCache.get(redisCacheKey);

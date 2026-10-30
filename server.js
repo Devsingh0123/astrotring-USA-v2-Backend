@@ -20,9 +20,22 @@ const app = express();
 // Security HTTP headers
 app.use(helmet());
 
-// CORS Configuration - whitelist frontend origin only
+// CORS Configuration - whitelist frontend origin(s) only
+const allowedOrigins = (
+  process.env.FRONTEND_URL ||
+  'http://localhost:5173,https://japaika.com,https://www.japaika.com'
+)
+  .split(',')
+  .map((origin) => origin.trim())
+  .filter(Boolean);
+
 const corsOptions = {
-  origin: process.env.FRONTEND_URL || 'http://localhost:5173',
+  origin: (origin, callback) => {
+    if (!origin || allowedOrigins.includes(origin)) {
+      return callback(null, true);
+    }
+    return callback(new Error('Not allowed by CORS'));
+  },
   credentials: true,
   optionsSuccessStatus: 200
 };

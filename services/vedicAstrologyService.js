@@ -505,7 +505,7 @@ export const vedicAstrologyService = {
    * 12. GET /muhurta/events — Event types accepted by /muhurta
    */
   async getMuhurtaEvents() {
-    const cacheKey = 'astrotring:muhurta_events';
+    const cacheKey = 'japaika:muhurta_events';
     const cached = await vedicCache.get(cacheKey);
     if (cached) return cached;
 
@@ -524,7 +524,7 @@ export const vedicAstrologyService = {
     }
 
     const cleanQuery = query.trim();
-    const cacheKey = `astrotring:loc_exact:${cleanQuery}`;
+    const cacheKey = `japaika:loc_exact:${cleanQuery}`;
     const cached = await vedicCache.get(cacheKey);
     if (cached) return cached;
 
@@ -545,7 +545,7 @@ export const vedicAstrologyService = {
     const cleanQuery = query.trim();
     if (cleanQuery.length < 2) return { query: cleanQuery, count: 0, results: [] };
 
-    const cacheKey = `astrotring:loc_autocomplete:${cleanQuery}:${limit}`;
+    const cacheKey = `japaika:loc_autocomplete:${cleanQuery}:${limit}`;
     const cached = await vedicCache.get(cacheKey);
     if (cached) return cached;
 
@@ -562,7 +562,7 @@ export const vedicAstrologyService = {
    * 15. GET /health — Engine health check
    */
   async getHealth() {
-    const cacheKey = 'astrotring:engine_health';
+    const cacheKey = 'japaika:engine_health';
     const cached = await vedicCache.get(cacheKey);
     if (cached) return cached;
 

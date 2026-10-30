@@ -1,5 +1,5 @@
 /**
- * Master catalog of deep astrology reports supported by AstroTring.
+ * Master catalog of deep astrology reports supported by Japaika.
  * Synchronized with shared/PRD.md and frontend catalog definitions.
  */
 export const REPORT_CATEGORIES = [
